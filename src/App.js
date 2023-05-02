@@ -3,22 +3,18 @@ import '@fontsource/roboto/400.css';
 import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
 import * as React from 'react';
-import Button from '@mui/material/Button';
+import './App.css';
+import Header from "./Header";
+import Leaderboard from "./Leaderboard";
 
 
-function App() {
+export default function App(){
   return (
-    <><head>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" />
-      <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
-
-    </head>
-    <body>
-      <div>
-        <Button variant="contained">This is a button</Button>
-      </div>
-      </body></>
+    //set up the leaderboard page with background color and title
+    <div className="App"> 
+      <Header />
+      <Leaderboard />
+    </div>
   );
 }
 
-export default App;
