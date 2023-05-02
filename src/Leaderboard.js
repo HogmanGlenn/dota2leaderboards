@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import './App.css';
+import './Leaderboard.css';
 
 export default function Leaderboard() {
     //define the Leaderboard function
