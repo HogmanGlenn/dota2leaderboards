@@ -4,8 +4,8 @@ import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
 import * as React from 'react';
 import './App.css';
-import Header from "./Header";
-import Leaderboard from "./Leaderboard";
+import Header from "./components/header/Header";
+import Leaderboard from "./components/leaderboard/Leaderboard";
 
 
 export default function App(){
