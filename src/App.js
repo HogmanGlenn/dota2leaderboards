@@ -6,6 +6,7 @@ import * as React from 'react';
 import './App.css';
 import Header from "./components/header/Header";
 import Leaderboard from "./components/leaderboard/Leaderboard";
+import Container from '@mui/material/Container';
 
 
 export default function App(){
@@ -13,7 +14,9 @@ export default function App(){
     //set up the leaderboard page with background color and title
     <div className="App"> 
       <Header />
-      <Leaderboard />
+      <Container maxWidth="lg" style={{backgroundColor:"grey"}}>
+        <Leaderboard />
+      </Container>
     </div>
   );
 }

@@ -34,7 +34,7 @@ let players = createData(europeData.leaderboard)
 export default function Leaderboard() {
   return (
     <TableContainer component={Paper} style={{
-      width: 700,
+      width: 650,
       margin: '50px'
     }}>
       <Table sx={{ maxWidth: 650 }} size="small" aria-label="Dota 2 Leaderboards">
