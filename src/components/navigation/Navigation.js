@@ -2,10 +2,11 @@ import * as React from 'react';
 import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { Player } from '../../model/Player';
 import europeData from '../../data/europe/v0001.json';
+import FlagIcon from '@mui/icons-material/Flag';
 import './Navigation.css';
+//import Leaderboard from '../leaderboard/Leaderboard';
 
 function getFlagEmoji(countryCode) {
   if (!countryCode) return '';
@@ -69,7 +70,7 @@ export default function Navigation() {
         
         onClick={handleClick}
       >
-        <MoreVertIcon />
+        <FlagIcon fontSize='large'/>
       </IconButton>
       <Menu
         id="long-menu"
@@ -84,8 +85,8 @@ export default function Navigation() {
         disableScrollLock={true}
         PaperProps={{
           style: {
-            maxHeight: ITEM_HEIGHT * 4.5,
-            width: '8ch',
+            maxHeight: ITEM_HEIGHT * 5.5,
+            width: '15ch',
           },
         }}
       > 
@@ -97,6 +98,7 @@ export default function Navigation() {
         else {
           temp.push(countries.countryCode);
           return (
+            //TODO: Make the buttons work and filter the leaderboard
             <MenuItem key={countries.countryCode} onClick={handleClose}>
               {getFlagEmoji(countries.countryCode)}
             </MenuItem>
