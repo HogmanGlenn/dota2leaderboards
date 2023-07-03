@@ -1,4 +1,7 @@
-.long-button {
+.navigation-container {
+    position: absolute;
     color: white;
-    top: 90%;
-}
+    top: 103px;
+    right: 770px;
+    overflow: hidden;
+  }

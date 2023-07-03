@@ -57,14 +57,16 @@ export default function Navigation() {
   const temp = [players[0].countryCode]; // Store the first countryCode in temp
 
   return (
-    <div>
+    <div className="navigation-container">
       <IconButton
-        position="relative"
+        className="long-menu"
         aria-label="more"
         id="long-button"
         aria-controls={open ? 'long-menu' : undefined}
         aria-expanded={open ? 'true' : undefined}
         aria-haspopup="true"
+        color="inherit"
+        
         onClick={handleClick}
       >
         <MoreVertIcon />
@@ -77,6 +79,9 @@ export default function Navigation() {
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}
+        anchorOrigin={{vertical: 'bottom', horizontal: 'bottom'}}
+        transformOrigin={{vertical: 'top', horizontal: 'left'}}
+        disableScrollLock={true}
         PaperProps={{
           style: {
             maxHeight: ITEM_HEIGHT * 4.5,
@@ -84,6 +89,7 @@ export default function Navigation() {
           },
         }}
       > 
+
         {players.map((countries) => {
         if (temp.includes(countries.countryCode)) {
           return null;

@@ -15,7 +15,7 @@ export default function App(){
     //set up the leaderboard page with background color and title
     <div className="App"> 
       <Header />
-      <Container maxWidth="lg" style={{}}>
+      <Container maxWidth="lg" disableScrollLock={true}>
         <Leaderboard />
         <Navigation />
       </Container>

@@ -25,7 +25,7 @@ export default function Header() {
               component="div" sx={{ flexGrow: 1 }}>
               Dota 2 Leaderboards
             </Typography>
-            <Button color="inherit">Login</Button>
+            <Button className="Header-style" color="inherit">Login</Button>
           </Toolbar>
         </AppBar>
     );

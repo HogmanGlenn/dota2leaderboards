@@ -1,17 +1,6 @@
-/*Set the background of the application in app.js to (28,36,45) */
+/*Set the background of the application in app.js to (36,47,57) */
 body{
   background-color: rgb(36,47,57);
-}
+  scrollbar-gutter: stable both-edges;
 
-.Header {
-  text-align: center;
-  color: white;
-  font-family: 'Roboto', sans-serif;
-  background-color: rgb(36,47,57);
-  height: 100vh;
-  width: 100vw;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
 }
