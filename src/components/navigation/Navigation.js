@@ -17,6 +17,7 @@ function getFlagEmoji(countryCode) {
 
   return String.fromCodePoint(...codePoints);
 }
+
 function createData(leaderboardJson) {
   let players = leaderboardJson.map(x => new Player(x.country, x.name, x.rank, x.team_id, x.team_tag));
   players.sort((a, b) => a.rank - b.rank).forEach((x, i) => x.rank = i + 1);
@@ -24,6 +25,7 @@ function createData(leaderboardJson) {
 }
 
 let players = createData(europeData.leaderboard)
+
 
 const ITEM_HEIGHT = 48;
 
@@ -36,6 +38,23 @@ export default function Navigation() {
   const handleClose = () => {
     setAnchorEl(null);
   };
+
+
+  // Sort the players array by countryCode in alphabetical order
+  players.sort((a, b) => {
+    const countryCodeA = (a.countryCode || '').toUpperCase();
+    const countryCodeB = (b.countryCode || '').toUpperCase();
+
+    if (countryCodeA < countryCodeB) {
+      return -1;
+    }
+    if (countryCodeA > countryCodeB) {
+      return 1;
+    }
+    return 0;
+  });
+
+  const temp = [players[0].countryCode]; // Store the first countryCode in temp
 
   return (
     <div>
@@ -61,15 +80,23 @@ export default function Navigation() {
         PaperProps={{
           style: {
             maxHeight: ITEM_HEIGHT * 4.5,
-            width: '20ch',
+            width: '8ch',
           },
         }}
-      >
-        {players.map((countries) => (
-          <MenuItem key={countries} onClick={handleClose}>
-            {getFlagEmoji(countries.countryCode)}
-          </MenuItem>
-        ))}
+      > 
+        {players.map((countries) => {
+        if (temp.includes(countries.countryCode)) {
+          return null;
+        }
+        else {
+          temp.push(countries.countryCode);
+          return (
+            <MenuItem key={countries.countryCode} onClick={handleClose}>
+              {getFlagEmoji(countries.countryCode)}
+            </MenuItem>
+          );
+        }
+        })}
       </Menu>
     </div>
   );
