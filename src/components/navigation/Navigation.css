@@ -1,5 +1,5 @@
 .navigation-container {
-    position: absolute;
+    position: fixed;
     color: white;
     top: 103px;
     right: 770px;

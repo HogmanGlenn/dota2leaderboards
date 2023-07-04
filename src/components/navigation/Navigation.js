@@ -6,7 +6,7 @@ import { Player } from '../../model/Player';
 import europeData from '../../data/europe/v0001.json';
 import FlagIcon from '@mui/icons-material/Flag';
 import './Navigation.css';
-//import Leaderboard from '../leaderboard/Leaderboard';
+
 
 function getFlagEmoji(countryCode) {
   if (!countryCode) return '';
@@ -16,14 +16,24 @@ function getFlagEmoji(countryCode) {
     .split('')
     .map(char => 127397 + char.charCodeAt());
 
-  return String.fromCodePoint(...codePoints);
+    return String.fromCodePoint(...codePoints);
 }
+
+function getCountryName(countryCode) {
+
+  const regionNames = new Intl.DisplayNames(['en'], {type: 'region'});
+  return regionNames.of(countryCode) + " " + getFlagEmoji(countryCode);
+}
+
 
 function createData(leaderboardJson) {
   let players = leaderboardJson.map(x => new Player(x.country, x.name, x.rank, x.team_id, x.team_tag));
   players.sort((a, b) => a.rank - b.rank).forEach((x, i) => x.rank = i + 1);
+
   return players;
 }
+
+
 
 let players = createData(europeData.leaderboard)
 
@@ -86,7 +96,7 @@ export default function Navigation() {
         PaperProps={{
           style: {
             maxHeight: ITEM_HEIGHT * 5.5,
-            width: '15ch',
+            width: '30ch',
           },
         }}
       > 
@@ -98,9 +108,8 @@ export default function Navigation() {
         else {
           temp.push(countries.countryCode);
           return (
-            //TODO: Make the buttons work and filter the leaderboard
             <MenuItem key={countries.countryCode} onClick={handleClose}>
-              {getFlagEmoji(countries.countryCode)}
+              {getCountryName(countries.countryCode.toUpperCase())}
             </MenuItem>
           );
         }
