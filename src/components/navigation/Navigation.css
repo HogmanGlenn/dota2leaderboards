@@ -1,7 +1,16 @@
 .navigation-container {
     position: fixed;
     color: white;
-    top: 103px;
-    right: 770px;
+    top: 115px;
+    right: 660px;
     overflow: hidden;
+    border-style: solid;
+    border-radius: 50px;
   }
+.navigation-container:hover {
+  transition: 0.5s;
+  background-color: grey;
+  visibility: visible;
+  border-radius: 50px;
+
+}

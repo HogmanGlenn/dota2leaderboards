@@ -67,7 +67,7 @@ export default function Navigation() {
   });
 
   const temp = [filteredPlayers[0].countryCode]; // Store the first countryCode in temp
-
+//TODO: Move menu in CSS
   return (
     <div className="navigation-container">
       <IconButton
@@ -83,7 +83,7 @@ export default function Navigation() {
       >
         <FlagIcon fontSize='large'/>
       </IconButton>
-      <Menu
+      <Menu classname="menu-country"
         id="long-menu"
         MenuListProps={{
           'aria-labelledby': 'long-button',
@@ -91,9 +91,9 @@ export default function Navigation() {
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}
-        anchorOrigin={{vertical: 'bottom', horizontal: 'bottom'}}
-        transformOrigin={{vertical: 'top', horizontal: 'left'}}
-        disableScrollLock={true}
+        anchorOrigin={{vertical: 'bottom', horizontal: 'center'}}
+        transformOrigin={{vertical: 'top', horizontal: 'center'}}
+        disableScrollLock={true}     
         PaperProps={{
           style: {
             maxHeight: ITEM_HEIGHT * 5.5,
