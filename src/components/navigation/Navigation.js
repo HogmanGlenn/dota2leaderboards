@@ -7,7 +7,6 @@ import europeData from '../../data/europe/v0001.json';
 import FlagIcon from '@mui/icons-material/Flag';
 import './Navigation.css';
 
-
 function getFlagEmoji(countryCode) {
   if (!countryCode) return '';
 
@@ -21,8 +20,9 @@ function getFlagEmoji(countryCode) {
 
 function getCountryName(countryCode) {
 
-  const regionNames = new Intl.DisplayNames(['en'], {type: 'region'});
-  return regionNames.of(countryCode) + " " + getFlagEmoji(countryCode);
+    const regionNames = new Intl.DisplayNames(['en'], {type: 'region'});
+    return regionNames.of(countryCode) + " " + getFlagEmoji(countryCode);
+
 }
 
 
@@ -50,9 +50,10 @@ export default function Navigation() {
     setAnchorEl(null);
   };
 
+  const filteredPlayers = players.filter(player => europeData.leaderboard.some(entry => entry.country === player.countryCode));
 
   // Sort the players array by countryCode in alphabetical order
-  players.sort((a, b) => {
+  filteredPlayers.sort((a, b) => {
     const countryCodeA = (a.countryCode || '').toUpperCase();
     const countryCodeB = (b.countryCode || '').toUpperCase();
 
@@ -65,7 +66,7 @@ export default function Navigation() {
     return 0;
   });
 
-  const temp = [players[0].countryCode]; // Store the first countryCode in temp
+  const temp = [filteredPlayers[0].countryCode]; // Store the first countryCode in temp
 
   return (
     <div className="navigation-container">
@@ -101,7 +102,7 @@ export default function Navigation() {
         }}
       > 
 
-        {players.map((countries) => {
+        {filteredPlayers.map((countries) => {
         if (temp.includes(countries.countryCode)) {
           return null;
         }
