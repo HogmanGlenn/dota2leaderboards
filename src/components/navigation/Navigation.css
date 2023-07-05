@@ -14,3 +14,7 @@
   border-radius: 50px;
 
 }
+.MuiMenu-paper {
+  /* Add custom positioning styles here */
+  margin-top: 10px; /* Adjust the margin top value as needed */
+}
