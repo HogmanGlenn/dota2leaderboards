@@ -2,10 +2,10 @@ import * as React from 'react';
 import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
-import { Player } from '../../model/Player';
 import europeData from '../../data/europe/v0001.json';
 import FlagIcon from '@mui/icons-material/Flag';
 import './Navigation.css';
+import { createData } from '../leaderboard/Leaderboard';
 
 function getFlagEmoji(countryCode) {
   if (!countryCode) return '';
@@ -25,19 +25,6 @@ function getCountryName(countryCode) {
 
 }
 
-
-function createMenuData(leaderboardJson) {
-  let players = leaderboardJson.map(x => new Player(x.country, x.name, x.rank, x.team_id, x.team_tag));
-  players.sort((a, b) => a.rank - b.rank).forEach((x, i) => x.rank = i + 1);
-
-  return players;
-}
-
-
-
-let players = createMenuData(europeData.leaderboard)
-
-
 const ITEM_HEIGHT = 48;
 
 export default function Navigation({ setFilteredPlayers }) {
@@ -50,7 +37,7 @@ export default function Navigation({ setFilteredPlayers }) {
   const handleClose = (countryCode) => {
     setAnchorEl(null);
     setSelectedCountry(countryCode);
-    const updatedFilteredPlayers = players.filter(
+    const updatedFilteredPlayers = createData(europeData.leaderboard).filter(
       (player) => player.countryCode === countryCode.toUpperCase()
     );
     setFilteredPlayers(updatedFilteredPlayers);
@@ -58,11 +45,11 @@ export default function Navigation({ setFilteredPlayers }) {
 
     React.useEffect(() => {
     // Update filtered players based on the selected country
-    const updatedFilteredPlayers = players.filter((player) => player.countryCode === selectedCountry);
+    const updatedFilteredPlayers = createData(europeData.leaderboard).filter((player) => player.countryCode === selectedCountry);
     setFilteredPlayers(updatedFilteredPlayers);
   }, [selectedCountry]);
 
-  const filteredPlayers = players.filter(player => europeData.leaderboard.some(entry => entry.country === player.countryCode));
+  const filteredPlayers = createData(europeData.leaderboard).filter(player => europeData.leaderboard.some(entry => entry.country === player.countryCode));
 
   // Sort the players array by countryCode in alphabetical order
   filteredPlayers.sort((a, b) => {

@@ -10,6 +10,8 @@ import { Player } from '../../model/Player';
 import europeData from '../../data/europe/v0001.json';
 import './Leaderboard.css';
 
+//TODO: It's the duplicates that cause the issue.
+
 // Yoinked from https://dev.to/jorik/country-code-to-flag-emoji-a21
 function getFlagEmoji(countryCode) {
   if (!countryCode) return '';
@@ -24,16 +26,27 @@ function getFlagEmoji(countryCode) {
 
 export function createData(leaderboardJson) {
   let players = leaderboardJson.map(x => new Player(x.country, x.name, x.rank, x.team_id, x.team_tag));
-  players.sort((a, b) => a.rank - b.rank).forEach((x, i) => x.rank = i + 1);
+
+  // Sort the players by rank in ascending order
+  players.sort((a, b) => a.rank - b.rank);
+
+  // Assign a unique rank to each player
+  let currentRank = 1;
+  players.forEach((player, index) => {
+    if (index > 0 && player.rank === players[index - 1].rank) {
+      player.rank = currentRank; // Assign the same rank as the previous player
+    } else {
+      player.rank = currentRank++; // Assign a new rank
+    }
+  });
+
   return players;
 }
 
 
-let players = createData(europeData.leaderboard)
+export default function Leaderboard({ filteredPlayers }) {
 
-export default function Leaderboard({ filteredPlayers }, { selectedCountry }) {
-
-  const displayPlayers = filteredPlayers.length > 0 ? filteredPlayers : players;
+  const displayPlayers = filteredPlayers.length > 0 ? filteredPlayers : createData(europeData.leaderboard);
   
   return (
     <TableContainer component={Paper} style={{
