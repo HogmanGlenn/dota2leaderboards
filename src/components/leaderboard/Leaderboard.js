@@ -7,9 +7,8 @@ import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 import * as React from "react";
 import { Player } from '../../model/Player';
-
-import './Leaderboard.css';
 import europeData from '../../data/europe/v0001.json';
+import './Leaderboard.css';
 
 // Yoinked from https://dev.to/jorik/country-code-to-flag-emoji-a21
 function getFlagEmoji(countryCode) {
@@ -23,15 +22,19 @@ function getFlagEmoji(countryCode) {
   return String.fromCodePoint(...codePoints);
 }
 
-function createData(leaderboardJson) {
+export function createData(leaderboardJson) {
   let players = leaderboardJson.map(x => new Player(x.country, x.name, x.rank, x.team_id, x.team_tag));
   players.sort((a, b) => a.rank - b.rank).forEach((x, i) => x.rank = i + 1);
   return players;
 }
 
+
 let players = createData(europeData.leaderboard)
 
-export default function Leaderboard() {
+export default function Leaderboard({ filteredPlayers }, { selectedCountry }) {
+
+  const displayPlayers = filteredPlayers.length > 0 ? filteredPlayers : players;
+  
   return (
     <TableContainer component={Paper} style={{
       width: 650,
@@ -47,7 +50,7 @@ export default function Leaderboard() {
           </TableRow>
         </TableHead>
         <TableBody>
-          {players.map((player) => (
+          {displayPlayers.map((player) => (
             <TableRow
               key={player.name}
               sx={{ '&:last-child td, &:last-child th': { border: 5 } }}

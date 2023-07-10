@@ -26,7 +26,7 @@ function getCountryName(countryCode) {
 }
 
 
-function createData(leaderboardJson) {
+function createMenuData(leaderboardJson) {
   let players = leaderboardJson.map(x => new Player(x.country, x.name, x.rank, x.team_id, x.team_tag));
   players.sort((a, b) => a.rank - b.rank).forEach((x, i) => x.rank = i + 1);
 
@@ -35,20 +35,32 @@ function createData(leaderboardJson) {
 
 
 
-let players = createData(europeData.leaderboard)
+let players = createMenuData(europeData.leaderboard)
 
 
 const ITEM_HEIGHT = 48;
 
-export default function Navigation() {
+export default function Navigation({ setFilteredPlayers }) {
   const [anchorEl, setAnchorEl] = React.useState(null);
   const open = Boolean(anchorEl);
+  const [selectedCountry, setSelectedCountry] = React.useState('');
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
   };
-  const handleClose = () => {
+  const handleClose = (countryCode) => {
     setAnchorEl(null);
+    setSelectedCountry(countryCode);
+    const updatedFilteredPlayers = players.filter(
+      (player) => player.countryCode === countryCode.toUpperCase()
+    );
+    setFilteredPlayers(updatedFilteredPlayers);
   };
+
+    React.useEffect(() => {
+    // Update filtered players based on the selected country
+    const updatedFilteredPlayers = players.filter((player) => player.countryCode === selectedCountry);
+    setFilteredPlayers(updatedFilteredPlayers);
+  }, [selectedCountry]);
 
   const filteredPlayers = players.filter(player => europeData.leaderboard.some(entry => entry.country === player.countryCode));
 
@@ -66,8 +78,7 @@ export default function Navigation() {
     return 0;
   });
 
-  const temp = [filteredPlayers[0].countryCode]; // Store the first countryCode in temp
-//TODO: Move menu in CSS
+  const temp = [filteredPlayers.countryCode]; // Store the first countryCode in temp
   return (
     <div className="navigation-container">
       <IconButton
@@ -80,6 +91,7 @@ export default function Navigation() {
         color="inherit"
         
         onClick={handleClick}
+        style={{fontSize: '32px'}}
       >
         <FlagIcon fontSize='large'/>
       </IconButton>
@@ -109,8 +121,11 @@ export default function Navigation() {
         else {
           temp.push(countries.countryCode);
           return (
-            <MenuItem key={countries.countryCode} onClick={handleClose}>
-              {getCountryName(countries.countryCode.toUpperCase())}
+            <MenuItem
+                key={countries.countryCode}
+                onClick={() => handleClose(countries.countryCode)}
+            >
+                {getCountryName(countries.countryCode.toUpperCase())}
             </MenuItem>
           );
         }
@@ -119,3 +134,5 @@ export default function Navigation() {
     </div>
   );
 }
+
+  

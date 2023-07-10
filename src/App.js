@@ -8,16 +8,20 @@ import Header from "./components/header/Header";
 import Leaderboard from "./components/leaderboard/Leaderboard";
 import Navigation from "./components/navigation/Navigation"
 import Container from '@mui/material/Container';
+import { useState } from 'react';
 
 
 export default function App(){
+
+  const [filteredPlayers, setFilteredPlayers] = useState([]);
+
+
   return (
-    //set up the leaderboard page with background color and title
-    <div className="App"> 
+    <div className="App">
       <Header />
       <Container maxWidth="lg" disableScrollLock={true}>
-        <Leaderboard />
-        <Navigation />
+        <Leaderboard filteredPlayers={filteredPlayers}/>
+        <Navigation setFilteredPlayers={setFilteredPlayers}/>
       </Container>
     </div>
   );
