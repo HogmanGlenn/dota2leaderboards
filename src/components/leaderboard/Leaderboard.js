@@ -76,7 +76,6 @@ export default function Leaderboard({ filteredPlayers }) {
           {displayPlayers.map((player) => (
             <TableRow
               key={`${player.name}_${player.rank}`}
-              sx={{ "&:last-child td, &:last-child th": { border: 5 } }}
             >
               <TableCell component="th" scope="row">
                 {getFlagEmoji(player.countryCode)}
