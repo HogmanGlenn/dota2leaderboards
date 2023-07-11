@@ -1,123 +1,75 @@
 import * as React from "react";
-import IconButton from "@mui/material/IconButton";
-import Menu from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
-import europeData from "../../data/europe/v0001.json";
-import FlagIcon from "@mui/icons-material/Flag";
+import { getFlagEmoji } from "../leaderboard/Leaderboard";
 import "./Navigation.css";
-import { createData } from "../leaderboard/Leaderboard";
+import Box from "@mui/material/Box";
+import AutoComplete from "@mui/material/Autocomplete";
+import TextField from "@mui/material/TextField";
+import MenuItem from "@mui/material/MenuItem";
 
-function getFlagEmoji(countryCode) {
-  if (!countryCode) return "";
+const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
 
-  const codePoints = countryCode
-    .toUpperCase()
-    .split("")
-    .map((char) => 127397 + char.charCodeAt());
+export default function Navigation({ allPlayers, setFilteredPlayers }) {
+    const allCountry = { countryCode: "", name: "All", flagEmoji: "🌍", numPlayers: allPlayers.length };
+    const [selectedCountry, setCountry] = React.useState(allCountry);
 
-  return String.fromCodePoint(...codePoints);
-}
+    const handleCountryUpdate = (event, value) => {
+        const countryCode = !value ? "" : value.countryCode;
 
-function getCountryName(countryCode) {
-  const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
-  return regionNames.of(countryCode) + " " + getFlagEmoji(countryCode);
-}
+        setCountry(!value ? allCountry : value);
 
-const ITEM_HEIGHT = 48;
+        const updatedFilteredPlayers = !countryCode || typeof countryCode !== "string" || countryCode === ""
+            ? allPlayers
+            : allPlayers.filter(player => player.countryCode === countryCode);
 
-export default function Navigation({ setFilteredPlayers }) {
-  const [anchorEl, setAnchorEl] = React.useState(null);
-  const open = Boolean(anchorEl);
-  const [selectedCountry, setSelectedCountry] = React.useState("");
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-  const handleClose = (countryCode) => {
-    setAnchorEl(null);
-    setSelectedCountry(countryCode);
-    const updatedFilteredPlayers = createData(europeData.leaderboard).filter(
-      (player) => player.countryCode === countryCode.toUpperCase()
-    );
-    setFilteredPlayers(updatedFilteredPlayers);
-  };
-
-  React.useEffect(() => {
-    // Update filtered players based on the selected country
-    const updatedFilteredPlayers = createData(europeData.leaderboard).filter(
-      (player) => player.countryCode === selectedCountry
-    );
-    setFilteredPlayers(updatedFilteredPlayers);
-  }, [selectedCountry]);
-
-  const filteredPlayers = createData(europeData.leaderboard).filter((player) =>
-    europeData.leaderboard.some((entry) => entry.country === player.countryCode)
-  );
-
-  // Sort the players array by countryCode in alphabetical order
-  filteredPlayers.sort((a, b) => {
-    const countryCodeA = (a.countryCode || "").toUpperCase();
-    const countryCodeB = (b.countryCode || "").toUpperCase();
-
-    if (countryCodeA < countryCodeB) {
-      return -1;
+        setFilteredPlayers(updatedFilteredPlayers);
     }
-    if (countryCodeA > countryCodeB) {
-      return 1;
-    }
-    return 0;
-  });
 
-  const temp = [filteredPlayers.countryCode]; // Store the first countryCode in temp
-  return (
-    <div className="navigation-container">
-      <IconButton
-        className="long-menu"
-        aria-label="more"
-        id="long-button"
-        aria-controls={open ? "long-menu" : undefined}
-        aria-expanded={open ? "true" : undefined}
-        aria-haspopup="true"
-        color="inherit"
-        onClick={handleClick}
-        style={{ fontSize: "32px" }}
-      >
-        <FlagIcon fontSize="large" />
-      </IconButton>
-      <Menu
-        className="menu-country"
-        id="long-menu"
-        MenuListProps={{
-          "aria-labelledby": "long-button",
-        }}
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        transformOrigin={{ vertical: "top", horizontal: "center" }}
-        disableScrollLock={true}
-        PaperProps={{
-          style: {
-            maxHeight: ITEM_HEIGHT * 5.5,
-            width: "30ch",
-          },
-        }}
-      >
-        {filteredPlayers.map((countries) => {
-          if (temp.includes(countries.countryCode)) {
-            return null;
-          } else {
-            temp.push(countries.countryCode);
-            return (
-              <MenuItem
-                key={countries.countryCode}
-                onClick={() => handleClose(countries.countryCode)}
-              >
-                {getCountryName(countries.countryCode.toUpperCase())}
-              </MenuItem>
-            );
-          }
-        })}
-      </Menu>
-    </div>
-  );
+    var countries = [...new Set(allPlayers.map(player => player.countryCode))]
+        .filter(countryCode => countryCode !== "" && typeof countryCode === "string")
+        .map(countryCode => {
+            return {
+                countryCode: countryCode,
+                name: regionNames.of(countryCode),
+                flagEmoji: getFlagEmoji(countryCode),
+                numPlayers: allPlayers.filter(player => player.countryCode === countryCode).length
+            }
+        }).sort((a, b) => {
+            if (a.name > b.name) return 1;
+            else if (a.name < b.name) return -1;
+            else return 0;
+        });
+
+    countries = [allCountry, ...countries];
+
+    return (
+        <Box margin={"30px auto 30px auto"}>
+            <AutoComplete
+                value={selectedCountry}
+                options={countries}
+                onChange={handleCountryUpdate}
+                getOptionLabel={option => option.name || ""}
+                autoHighlight
+                renderOption={(props, option) => (
+                    <MenuItem
+                        key={option.countryCode}
+                        {...props}>
+                        {option.flagEmoji} {option.name} ({option.numPlayers})
+                    </MenuItem>
+                )}
+                renderInput={(params) => (
+                    <TextField
+                        {...params}
+                        label="Select a country"
+                        inputProps={{
+                            ...params.inputProps
+                        }}
+                    />
+                )}
+                isOptionEqualToValue={(option, value) => {
+                    return option.countryCode === value;
+                }}
+            >
+            </AutoComplete>
+        </Box>
+    );
 }

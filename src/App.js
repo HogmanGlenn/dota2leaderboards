@@ -9,17 +9,35 @@ import Leaderboard from "./components/leaderboard/Leaderboard";
 import Navigation from "./components/navigation/Navigation";
 import Container from "@mui/material/Container";
 import { useState } from "react";
+import { getPlayersData } from './api/LeaderboardsApi';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+
+const darkTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#448E85'
+    },
+  },
+});
+
+var players = getPlayersData();
 
 export default function App() {
-  const [filteredPlayers, setFilteredPlayers] = useState([]);
+  const [filteredPlayers, setFilteredPlayers] = useState(players);
 
   return (
-    <div className="App">
-      <Header />
-      <Container maxWidth="lg">
-        <Leaderboard filteredPlayers={filteredPlayers} />
-        <Navigation setFilteredPlayers={setFilteredPlayers} />
-      </Container>
-    </div>
+    <ThemeProvider theme={darkTheme}>
+      <CssBaseline />
+      <div className="App">
+        <Header />
+
+        <Container maxWidth="lg" style={{ maxWidth: 850, marginTop: 80 }}>
+          <Navigation allPlayers={players} setFilteredPlayers={setFilteredPlayers} />
+          <Leaderboard filteredPlayers={filteredPlayers} />
+        </Container>
+      </div>
+    </ThemeProvider>
   );
 }

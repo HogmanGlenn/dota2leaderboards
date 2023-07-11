@@ -1,6 +1,8 @@
-/*Set the background of the application in app.js to (36,47,57) */
-body{
-  background-color: rgb(36,47,57);
-  scrollbar-gutter: stable both-edges;
-
+body {
+    background-image: url("/backgrounds/gallery_background_png.avif");
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-attachment:fixed;
+    height:100%;
+    margin:0;
 }
