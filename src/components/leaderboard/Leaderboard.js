@@ -1,31 +1,33 @@
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
-import Paper from '@mui/material/Paper';
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import Paper from "@mui/material/Paper";
 import * as React from "react";
-import { Player } from '../../model/Player';
-import europeData from '../../data/europe/v0001.json';
-import './Leaderboard.css';
+import { Player } from "../../model/Player";
+import europeData from "../../data/europe/v0001.json";
+import "./Leaderboard.css";
 
 //TODO: It's the duplicates that cause the issue.
 
 // Yoinked from https://dev.to/jorik/country-code-to-flag-emoji-a21
 function getFlagEmoji(countryCode) {
-  if (!countryCode) return '';
+  if (!countryCode) return "";
 
   const codePoints = countryCode
     .toUpperCase()
-    .split('')
-    .map(char => 127397 + char.charCodeAt());
+    .split("")
+    .map((char) => 127397 + char.charCodeAt());
 
   return String.fromCodePoint(...codePoints);
 }
 
 export function createData(leaderboardJson) {
-  let players = leaderboardJson.map(x => new Player(x.country, x.name, x.rank, x.team_id, x.team_tag));
+  let players = leaderboardJson.map(
+    (x) => new Player(x.country, x.name, x.rank, x.team_id, x.team_tag)
+  );
 
   // Sort the players by rank in ascending order
   players.sort((a, b) => a.rank - b.rank);
@@ -43,17 +45,25 @@ export function createData(leaderboardJson) {
   return players;
 }
 
-
 export default function Leaderboard({ filteredPlayers }) {
+  const displayPlayers =
+    filteredPlayers.length > 0
+      ? filteredPlayers
+      : createData(europeData.leaderboard);
 
-  const displayPlayers = filteredPlayers.length > 0 ? filteredPlayers : createData(europeData.leaderboard);
-  
   return (
-    <TableContainer component={Paper} style={{
-      width: 650,
-      margin: '50px'
-    }}>
-      <Table sx={{ maxWidth: 650 }} size="small" aria-label="Dota 2 Leaderboards">
+    <TableContainer
+      component={Paper}
+      style={{
+        width: 650,
+        margin: "50px",
+      }}
+    >
+      <Table
+        sx={{ maxWidth: 650 }}
+        size="small"
+        aria-label="Dota 2 Leaderboards"
+      >
         <TableHead>
           <TableRow>
             <TableCell>Country</TableCell>
@@ -65,8 +75,7 @@ export default function Leaderboard({ filteredPlayers }) {
         <TableBody>
           {displayPlayers.map((player) => (
             <TableRow
-              key={player.name}
-              sx={{ '&:last-child td, &:last-child th': { border: 5 } }}
+              key={`${player.name}_${player.rank}`}
             >
               <TableCell component="th" scope="row">
                 {getFlagEmoji(player.countryCode)}
