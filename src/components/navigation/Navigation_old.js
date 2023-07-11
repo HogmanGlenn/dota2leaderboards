@@ -2,47 +2,73 @@ import * as React from "react";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
+import europeData from "../../data/europe/v0001.json";
 import FlagIcon from "@mui/icons-material/Flag";
-import { getFlagEmoji } from "../leaderboard/Leaderboard";
 import "./Navigation.css";
+import { createData } from "../leaderboard/Leaderboard";
 
-const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
+function getFlagEmoji(countryCode) {
+  if (!countryCode) return "";
+
+  const codePoints = countryCode
+    .toUpperCase()
+    .split("")
+    .map((char) => 127397 + char.charCodeAt());
+
+  return String.fromCodePoint(...codePoints);
+}
+
+function getCountryName(countryCode) {
+  countryCode = countryCode.toUpperCase();
+  const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
+  return regionNames.of(countryCode) + " " + getFlagEmoji(countryCode);
+}
+
 const ITEM_HEIGHT = 48;
 
-export default function Navigation({ allPlayers, setFilteredPlayers }) {
+export default function Navigation({ setFilteredPlayers }) {
   const [anchorEl, setAnchorEl] = React.useState(null);
   const open = Boolean(anchorEl);
-
+  const [selectedCountry, setSelectedCountry] = React.useState("");
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
   };
-
   const handleClose = (countryCode) => {
     setAnchorEl(null);
-
-    const updatedFilteredPlayers = !countryCode || typeof countryCode !== "string" || countryCode == ""
-      ? allPlayers
-      : allPlayers.filter(player => player.countryCode === countryCode);
-
+    setSelectedCountry(countryCode);
+    const updatedFilteredPlayers = createData(europeData.leaderboard).filter(
+      (player) => player.countryCode === countryCode
+    );
     setFilteredPlayers(updatedFilteredPlayers);
-  }
+  };
 
-  var countries = [...new Set(allPlayers.map(player => player.countryCode))]
-    .filter(countryCode => countryCode !== "" && typeof countryCode === "string")
-    .map(countryCode => {
-      return {
-        countryCode: countryCode,
-        name: regionNames.of(countryCode),
-        flagEmoji: getFlagEmoji(countryCode),
-        numPlayers: allPlayers.filter(player => player.countryCode === countryCode).length
-      }
-    })
-    .sort((a, b) => {
-      if (a.name > b.name) return 1;
-      else if (a.name < b.name) return -1;
-      else return 0;
-    });
+  React.useEffect(() => {
+    // Update filtered players based on the selected country
+    const updatedFilteredPlayers = createData(europeData.leaderboard).filter(
+      (player) => player.countryCode === selectedCountry
+    );
+    setFilteredPlayers(updatedFilteredPlayers);
+  }, [selectedCountry]);
 
+  const filteredPlayers = createData(europeData.leaderboard).filter((player) =>
+    europeData.leaderboard.some((entry) => entry.country === player.countryCode)
+  );
+
+  // Sort the players array by countryCode in alphabetical order
+  filteredPlayers.sort((a, b) => {
+    const countryCodeA = (a.countryCode || "").toUpperCase();
+    const countryCodeB = (b.countryCode || "").toUpperCase();
+
+    if (countryCodeA < countryCodeB) {
+      return -1;
+    }
+    if (countryCodeA > countryCodeB) {
+      return 1;
+    }
+    return 0;
+  });
+
+  const temp = [filteredPlayers.countryCode]; // Store the first countryCode in temp
   return (
     <div className="navigation-container">
       <IconButton
@@ -70,17 +96,28 @@ export default function Navigation({ allPlayers, setFilteredPlayers }) {
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
         transformOrigin={{ vertical: "top", horizontal: "center" }}
         disableScrollLock={true}
-        
+        PaperProps={{
+          style: {
+            maxHeight: ITEM_HEIGHT * 5.5,
+            width: "30ch",
+          },
+        }}
       >
-        {countries.map(country =>
-          <MenuItem
-            key={country.countryCode}
-            onClick={() => handleClose(country.countryCode)}
-          >
-            {country.name} ({country.numPlayers}) {country.flagEmoji}
-          </MenuItem>
-        )
-        }
+        {filteredPlayers.map((countries) => {
+          if (temp.includes(countries.countryCode)) {
+            return null;
+          } else {
+            temp.push(countries.countryCode);
+            return (
+              <MenuItem
+                onClick={() => handleClose(countries.countryCode)}
+                key={countries.countryCode}
+              >
+                {getCountryName(countries.countryCode)}
+              </MenuItem>
+            );
+          }
+        })}
       </Menu>
     </div>
   );
