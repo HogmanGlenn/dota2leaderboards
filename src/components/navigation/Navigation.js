@@ -19,6 +19,7 @@ function getFlagEmoji(countryCode) {
 }
 
 function getCountryName(countryCode) {
+  countryCode = countryCode.toUpperCase();
   const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
   return regionNames.of(countryCode) + " " + getFlagEmoji(countryCode);
 }
@@ -36,7 +37,7 @@ export default function Navigation({ setFilteredPlayers }) {
     setAnchorEl(null);
     setSelectedCountry(countryCode);
     const updatedFilteredPlayers = createData(europeData.leaderboard).filter(
-      (player) => player.countryCode === countryCode.toUpperCase()
+      (player) => player.countryCode === countryCode
     );
     setFilteredPlayers(updatedFilteredPlayers);
   };
@@ -109,10 +110,10 @@ export default function Navigation({ setFilteredPlayers }) {
             temp.push(countries.countryCode);
             return (
               <MenuItem
-                key={countries.countryCode}
                 onClick={() => handleClose(countries.countryCode)}
+                key={countries.countryCode}
               >
-                {getCountryName(countries.countryCode.toUpperCase())}
+                {getCountryName(countries.countryCode)}
               </MenuItem>
             );
           }
