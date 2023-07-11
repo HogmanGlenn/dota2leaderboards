@@ -1,4 +1,3 @@
-import axios from "axios";
 import europeData from "../data/europe/v0001.json";
 import { Player } from '../model/Player'
 
