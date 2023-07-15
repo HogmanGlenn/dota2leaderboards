@@ -1,11 +1,12 @@
-import europeData from "../data/europe/v0001.json";
 import { Player } from '../model/Player'
 
 export function getPlayersData() {
-  return parseLeaderboard(europeData.leaderboard);
+  return fetch("/data/europe/v0001.json")
+    .then(response => response.json())
+    .then(json => parseLeaderboard(json.leaderboard))
 }
 
-function parseLeaderboard(leaderboardData) {
+function parseLeaderboard(leaderboardData) {  
   let players = leaderboardData.map(
     (x) => new Player(!x.country ? "" : x.country.toUpperCase(), x.name, x.rank, x.team_id, x.team_tag)
   );

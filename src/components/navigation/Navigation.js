@@ -24,7 +24,8 @@ export default function Navigation({ allPlayers, setFilteredPlayers }) {
         setFilteredPlayers(updatedFilteredPlayers);
     }
 
-    var countries = [...new Set(allPlayers.map(player => player.countryCode))]
+    // Unique countries of all players
+    var countries = [allCountry, ...new Set(allPlayers.map(player => player.countryCode))]
         .filter(countryCode => countryCode !== "" && typeof countryCode === "string")
         .map(countryCode => {
             return {
@@ -39,7 +40,10 @@ export default function Navigation({ allPlayers, setFilteredPlayers }) {
             else return 0;
         });
 
-    countries = [allCountry, ...countries];
+    // Force update when allPlayers changes
+    React.useEffect(() => {
+        handleCountryUpdate(null, selectedCountry);
+    }, [allPlayers])
 
     return (
         <Box margin={"30px auto 30px auto"}>
@@ -66,7 +70,7 @@ export default function Navigation({ allPlayers, setFilteredPlayers }) {
                     />
                 )}
                 isOptionEqualToValue={(option, value) => {
-                    return option.countryCode === value;
+                    return value.countryCode === "" || option.countryCode === value.countryCode;
                 }}
             >
             </AutoComplete>

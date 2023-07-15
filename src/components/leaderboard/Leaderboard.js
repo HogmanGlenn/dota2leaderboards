@@ -25,9 +25,6 @@ export function getFlagEmoji(countryCode) {
 
 export default function Leaderboard({ filteredPlayers }) {
   const theme = useTheme();
-
-  console.log(theme.palette.primary.main);
-
   const [page, setPage] = React.useState(0);
   const rowsPerPageOptions = [25, 50, 100, 1000, 5000];
   const [rowsPerPage, setRowsPerPage] = React.useState(rowsPerPageOptions[0]);

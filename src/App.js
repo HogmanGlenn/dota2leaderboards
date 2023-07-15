@@ -22,10 +22,11 @@ const darkTheme = createTheme({
   },
 });
 
-var players = getPlayersData();
-
 export default function App() {
-  const [filteredPlayers, setFilteredPlayers] = useState(players);
+  const [allPlayers, setAllPlayers] = useState([]);
+  const [filteredPlayers, setFilteredPlayers] = useState([]);
+
+  React.useEffect(() => { getPlayersData().then(playersData => setAllPlayers([...playersData])) }, []);
 
   return (
     <ThemeProvider theme={darkTheme}>
@@ -34,7 +35,7 @@ export default function App() {
         <Header />
 
         <Container maxWidth="lg" style={{ maxWidth: 850, marginTop: 80 }}>
-          <Navigation allPlayers={players} setFilteredPlayers={setFilteredPlayers} />
+          <Navigation allPlayers={allPlayers} setFilteredPlayers={setFilteredPlayers} />
           <Leaderboard filteredPlayers={filteredPlayers} />
         </Container>
       </div>
