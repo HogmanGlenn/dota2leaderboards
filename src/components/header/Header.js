@@ -5,7 +5,7 @@ import './Header.css';
 export default function Header() {
     return (
       <h1 style={{textAlign: 'center' }}>
-        Dota 2 Country Leaderboards (Europe Ladder)
+        Dota 2 Country Leaderboards | Europe
       </h1>
         // <AppBar position="static" style= {{background: '#33404D'}}>
         //     <Toolbar>
