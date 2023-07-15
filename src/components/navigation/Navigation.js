@@ -14,9 +14,6 @@ export default function Navigation({ allPlayers, setFilteredPlayers }) {
 
     const handleCountryUpdate = (event, value) => {
         const countryCode = !value ? "" : value.countryCode;
-
-        setCountry(!value ? allCountry : value);
-
         const updatedFilteredPlayers = !countryCode || typeof countryCode !== "string" || countryCode === ""
             ? allPlayers
             : allPlayers.filter(player => player.countryCode === countryCode);
