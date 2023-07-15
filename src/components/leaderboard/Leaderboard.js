@@ -10,17 +10,13 @@ import * as React from "react";
 import "./Leaderboard.css";
 import { useTheme } from '@mui/material/styles';
 
-//TODO: It's the duplicates that cause the issue.
+const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
 
-// Yoinked from https://dev.to/jorik/country-code-to-flag-emoji-a21
-export function getFlagEmoji(countryCode) {
+export function getFlagImageUrl(countryCode, size) {
   if (!countryCode) return "";
+  if (size === undefined) size = "24x18"; // default size
 
-  const codePoints = countryCode
-    .split("")
-    .map((char) => 127397 + char.charCodeAt());
-
-  return String.fromCodePoint(...codePoints);
+  return `/flags/${size}/${countryCode.toLowerCase()}.png`;
 }
 
 export default function Leaderboard({ filteredPlayers }) {
@@ -68,7 +64,11 @@ export default function Leaderboard({ filteredPlayers }) {
               key={`${player.name}_${player.rank}`}
             >
               <TableCell component="th" scope="row" style={{ width: "20px" }}>
-                {getFlagEmoji(player.countryCode)}
+                {
+                  player.countryCode === ""
+                    ? ""
+                    : <img src={getFlagImageUrl(player.countryCode)} alt={regionNames.of(player.countryCode)} />
+                }
               </TableCell>
               <TableCell align="right" style={{ width: "20px" }}>{player.rank}</TableCell>
               <TableCell align="right">{player.name}</TableCell>

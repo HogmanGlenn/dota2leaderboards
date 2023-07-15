@@ -1,5 +1,5 @@
 import * as React from "react";
-import { getFlagEmoji } from "../leaderboard/Leaderboard";
+import { getFlagImageUrl } from "../leaderboard/Leaderboard";
 import "./Navigation.css";
 import Box from "@mui/material/Box";
 import AutoComplete from "@mui/material/Autocomplete";
@@ -19,27 +19,30 @@ export default function Navigation({ allPlayers, setFilteredPlayers }) {
             : allPlayers.filter(player => player.countryCode === countryCode);
 
         setFilteredPlayers(updatedFilteredPlayers);
+        setCountry(value);
     }
 
     // Unique countries of all players
-    var countries = [allCountry, ...new Set(allPlayers.map(player => player.countryCode))]
+    var countries = [allCountry, ...[...new Set(allPlayers.map(player => player.countryCode))]
         .filter(countryCode => countryCode !== "" && typeof countryCode === "string")
         .map(countryCode => {
             return {
                 countryCode: countryCode,
                 name: regionNames.of(countryCode),
-                flagEmoji: getFlagEmoji(countryCode),
+                flagEmoji: ``,
                 numPlayers: allPlayers.filter(player => player.countryCode === countryCode).length
             }
         }).sort((a, b) => {
             if (a.name > b.name) return 1;
             else if (a.name < b.name) return -1;
             else return 0;
-        });
+        })];
 
     // Force update when allPlayers changes
     React.useEffect(() => {
         handleCountryUpdate(null, selectedCountry);
+
+        // TODO eager load all flag images (for countryCodes under AllPlayers) here to prevent flickering when first opening the dropdown
     }, [allPlayers])
 
     return (
@@ -54,7 +57,7 @@ export default function Navigation({ allPlayers, setFilteredPlayers }) {
                     <MenuItem
                         key={option.countryCode}
                         {...props}>
-                        {option.flagEmoji} {option.name} ({option.numPlayers})
+                        {option.countryCode === "" ? "🌍" : <img src={getFlagImageUrl(option.countryCode)} className="flagEmoji" alt={option.name} />} {option.name} ({option.numPlayers})
                     </MenuItem>
                 )}
                 renderInput={(params) => (
