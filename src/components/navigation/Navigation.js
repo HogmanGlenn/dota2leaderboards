@@ -11,6 +11,7 @@ const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
 export default function Navigation({ allPlayers, setFilteredPlayers }) {
     const allCountry = { countryCode: "", name: "All", flagEmoji: "🌍", numPlayers: allPlayers.length };
     const [selectedCountry, setCountry] = React.useState(allCountry);
+    const [flagCache, setFlagCache] = React.useState({});
 
     const handleCountryUpdate = (event, value) => {
         const countryCode = !value ? "" : value.countryCode;
@@ -37,6 +38,27 @@ export default function Navigation({ allPlayers, setFilteredPlayers }) {
             else if (a.name < b.name) return -1;
             else return 0;
         })];
+
+    // Fetch and cache flag images
+    React.useEffect(() => {
+        const fetchFlagImages = async () => {
+        const flagCacheCopy = { ...flagCache };
+        for (const country of countries) {
+            if (country.countryCode !== "") {
+            if (!flagCacheCopy[country.countryCode]) {
+                const imageUrl = getFlagImageUrl(country.countryCode);
+                const image = new Image();
+                image.src = imageUrl;
+                await image.decode();
+                flagCacheCopy[country.countryCode] = imageUrl;
+            }
+            }
+        }
+        setFlagCache(flagCacheCopy);
+        };
+
+    fetchFlagImages();
+  }, [countries, flagCache]);
 
     // Force update when allPlayers changes
     React.useEffect(() => {
