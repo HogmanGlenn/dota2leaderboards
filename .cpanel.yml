@@ -5,7 +5,4 @@ deployment:
     - /bin/cp -R public $DEPLOYPATH
     - /bin/cp -R src $DEPLOYPATH
     - /bin/cp -R app.js $DEPLOYPATH
-    - /bin/cp -R tmp $DEPLOYPATH
-    - /bin/cp -R package.json $DEPLOYPATH
-    - /bin/cp -R package-lock.json $DEPLOYPATH
-    - /bin/cp -R node_modules.txt $DEPLOYPATH
+
