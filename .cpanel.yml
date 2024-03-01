@@ -2,7 +2,4 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/dotafoxr/public_html/
-    - /bin/cp -R public $DEPLOYPATH
-    - /bin/cp -R src $DEPLOYPATH
-    - /bin/cp -R app.js $DEPLOYPATH
-
+    - /bin/cp -R repositories/d2l $DEPLOYPATH
