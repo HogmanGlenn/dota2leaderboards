@@ -1,5 +1,5 @@
 body {
-    background-image: url("/backgrounds/gallery_background_png.avif");
+    background-image: url("/public/backgrounds/gallery_background_png.avif");
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-attachment:fixed;

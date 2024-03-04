@@ -1,5 +1,0 @@
----
-deployment:
-  tasks:
-    - export DEPLOYPATH=/home/dotafoxr/public_html/
-    - /bin/cp -R * $DEPLOYPATH

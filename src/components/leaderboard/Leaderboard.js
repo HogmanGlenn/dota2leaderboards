@@ -52,7 +52,7 @@ export default function Leaderboard({ filteredPlayers }) {
       >
         <TableHead>
           <TableRow>
-            <TableCell style={{ color: theme.palette.primary.main }}>Country</TableCell>
+            <TableCell style={{ color: theme.palette.primary.main }} >Country</TableCell>
             <TableCell style={{ color: theme.palette.primary.main }} align="right">Rank</TableCell>
             <TableCell style={{ color: theme.palette.primary.main }} align="right">Name</TableCell>
             <TableCell style={{ color: theme.palette.primary.main }} align="right">Team</TableCell>

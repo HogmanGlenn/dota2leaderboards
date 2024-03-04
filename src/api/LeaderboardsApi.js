@@ -1,7 +1,7 @@
 import { Player } from '../model/Player'
 
-export function getPlayersData() {
-  return fetch("/data/europe/v0001.json")
+export function getPlayersData(region = 'europe') {
+  return fetch(`/data/${region}/v0001.json`)
     .then(response => response.json())
     .then(json => parseLeaderboard(json.leaderboard))
 }

@@ -1,27 +1,4 @@
-.navigation-container {
-  position: absolute;
-  color: white;
-  top: 115px;
-  right: 660px;
-  overflow: hidden;
-  border-style: solid;
-  border-radius: 50px;
-}
-
-.navigation-container:hover {
-  transition: 0.5s;
-  background-color: grey;
-  visibility: visible;
-  border-radius: 50px;
-
-}
-
-.MuiMenu-paper {
-  /* Add custom positioning styles here */
-  margin-top: 10px;
-  /* Adjust the margin top value as needed */
-}
 
 .flagEmoji {
-  margin-right: 5px;
+  margin-right: 10px;
 }

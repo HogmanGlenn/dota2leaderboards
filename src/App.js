@@ -23,10 +23,16 @@ const darkTheme = createTheme({
 });
 
 export default function App() {
+  const [region, setRegion] = useState("europe");
   const [allPlayers, setAllPlayers] = useState([]);
   const [filteredPlayers, setFilteredPlayers] = useState([]);
 
-  React.useEffect(() => { getPlayersData().then(playersData => setAllPlayers([...playersData])) }, []);
+  React.useEffect(() => {
+    getPlayersData(region).then(playersData => {
+      setAllPlayers(playersData);
+      setFilteredPlayers(playersData);
+  });
+  }, [region]);
 
   return (
     <ThemeProvider theme={darkTheme}>
@@ -35,7 +41,7 @@ export default function App() {
         <Header />
 
         <Container maxWidth="lg" style={{ maxWidth: 850, marginTop: 80 }}>
-          <Navigation allPlayers={allPlayers} setFilteredPlayers={setFilteredPlayers} />
+          <Navigation region={region} setRegion={setRegion} allPlayers={allPlayers} setFilteredPlayers={setFilteredPlayers} setAllPlayers={setAllPlayers}/>
           <Leaderboard filteredPlayers={filteredPlayers} />
         </Container>
       </div>
