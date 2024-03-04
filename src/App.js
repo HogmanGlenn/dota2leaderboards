@@ -40,7 +40,7 @@ export default function App() {
       <div className="App">
         <Header />
 
-        <Container maxWidth="lg" style={{ maxWidth: 850, marginTop: 80 }}>
+        <Container maxWidth="lg" style={{ maxWidth: 850, marginTop: 40 }}>
           <Navigation region={region} setRegion={setRegion} allPlayers={allPlayers} setFilteredPlayers={setFilteredPlayers} setAllPlayers={setAllPlayers}/>
           <Leaderboard filteredPlayers={filteredPlayers} />
         </Container>
