@@ -1,28 +1,44 @@
-import { Player } from '../model/Player'
+import { Player } from "../model/Player";
+import { getCountrySlug } from "../utils/countries";
 
-export function getPlayersData(region = "europe") {
-  return fetch(`/data/${region}/v0001.json`)
-    .then(response => response.json())
-    .then(json => parseLeaderboard(json.leaderboard))
-}
+const publicUrl = process.env.PUBLIC_URL || "";
 
-function parseLeaderboard(leaderboardData) {  
-  let players = leaderboardData.map(
-    (x) => new Player(!x.country ? "" : x.country.toUpperCase(), x.name, x.rank, x.team_id, x.team_tag)
-  );
-
-  // Sort the players by rank in ascending order
-  players.sort((a, b) => a.rank - b.rank);
-
-  // Assign a unique rank to each player
-  let currentRank = 1;
-  players.forEach((player, index) => {
-    if (index > 0 && player.rank === players[index - 1].rank) {
-      player.rank = currentRank; // Assign the same rank as the previous player
-    } else {
-      player.rank = currentRank++; // Assign a new rank
-    }
+export async function getLeaderboardData(region = "europe", options = {}) {
+  const response = await fetch(`${publicUrl}/data/${region}/v0001.json`, {
+    cache: options.cache,
+    signal: options.signal,
   });
 
-  return players;
+  if (!response.ok) {
+    throw new Error(`Leaderboard request failed (${response.status}).`);
+  }
+
+  const payload = await response.json();
+  if (!payload || !Array.isArray(payload.leaderboard) || payload.leaderboard.length === 0) {
+    throw new Error("Leaderboard data is not in the expected format.");
+  }
+
+  const players = payload.leaderboard
+    .map((entry) => {
+      const countryCode = typeof entry.country === "string" ? entry.country.toUpperCase() : "";
+      const name = entry.name || "Anonymous player";
+      const teamTag = entry.team_tag || "";
+
+      return new Player(
+        countryCode,
+        name,
+        Number(entry.rank),
+        entry.team_id,
+        teamTag,
+        getCountrySlug(countryCode),
+        `${name} ${teamTag}`.toLocaleLowerCase()
+      );
+    })
+    .filter((player) => Number.isFinite(player.rank))
+    .sort((a, b) => a.rank - b.rank);
+
+  return {
+    players,
+    updatedAt: Number(payload.time_posted) || null,
+  };
 }

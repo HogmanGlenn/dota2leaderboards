@@ -1,70 +1,68 @@
-# Getting Started with Create React App
+# Dota 2 Leaderboards
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A responsive GitHub Pages viewer for the official Dota 2 division leaderboards. Players can browse Europe, the Americas, China, and Southeast Asia, then filter by country, player name, or team tag.
 
-## Available Scripts
+## Local development
 
-In the project directory, you can run:
+This project requires Node.js 20 or newer.
 
-### `npm start`
+```bash
+npm ci
+npm start
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Run the automated checks and production build with:
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+```bash
+npm run test:ci
+npm run build
+```
 
-### `npm test`
+Filters are stored in normal query parameters, such as `?region=americas`. This keeps direct links compatible with a GitHub Pages project site without adding a hash fragment or requiring a custom 404 handler.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Refreshing leaderboard data
 
-### `npm run build`
+The updater uses only Python's standard library. Each region is replaced only after a valid, non-empty API response. If a request fails or Dota returns an empty leaderboard, the existing JSON for that region is left untouched, including its timestamp.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```bash
+python scripts/update_leaderboards.py
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+To update one or more divisions locally:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+python scripts/update_leaderboards.py --region europe --region americas
+```
 
-### `npm run eject`
+For local inspection, keep it refreshing every 30 seconds:
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+```bash
+python scripts/update_leaderboards.py --watch --interval 30
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Generated JSON is stored in `public/data/<region>/v0001.json` and is included in the static production build.
+Run the updater unit tests with `python -m unittest discover -s scripts -p "test_*.py"`.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## GitHub Pages automation
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+Two workflows are included:
 
-## Learn More
+- `Build and deploy GitHub Pages` runs tests, builds the React app, and deploys it whenever `master` changes or the workflow is started manually.
+- `Refresh leaderboard data` runs every 30 minutes (and on demand), commits changed JSON, and calls the Pages deployment workflow directly.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+Before the first deployment, open **Settings → Pages** in GitHub and set **Source** to **GitHub Actions**. The workflows use only the repository-provided `GITHUB_TOKEN`; no custom secrets are required.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### Deployment checklist
 
-### Code Splitting
+After pushing to `master`:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+1. Open **Settings → Pages** and set **Source** to **GitHub Actions**.
+2. Add the optional `GA_MEASUREMENT_ID` repository variable if Google Analytics should be enabled.
+3. Add the custom domain in **Settings → Pages**.
+4. Point the domain DNS at GitHub Pages, then wait for GitHub to verify DNS and issue HTTPS.
 
-### Analyzing the Bundle Size
+## Analytics
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+Google Analytics is optional. To enable it in production, create a GitHub repository variable named `GA_MEASUREMENT_ID` with the GA4 measurement ID, for example `G-XXXXXXXXXX`. Local builds can use the same value through `REACT_APP_GA_MEASUREMENT_ID`.
 
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+If the default branch is renamed, update the `master` branch references in both files under `.github/workflows`.

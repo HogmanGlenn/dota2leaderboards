@@ -1,8 +1,82 @@
-body {
-    background-image: url("/public/backgrounds/gallery_background_png.avif");
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
-    background-attachment:fixed;
-    height:100%;
-    margin:0;
+.app-shell {
+  min-height: 100dvh;
+  background: linear-gradient(90deg, #101010 0%, #121413 28%, #151b1a 50%, #121413 72%, #101010 100%);
+}
+
+.content {
+  display: flex;
+  --leaderboard-row-height: clamp(18px, calc((100dvh - 274px) / 25), 52px);
+  min-height: 100dvh;
+  width: min(860px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 18px 0 8px;
+  flex-direction: column;
+}
+
+.site-header {
+  padding: 6px 0 14px;
+  text-align: center;
+}
+
+.site-title {
+  margin: 0 auto;
+  padding: 0;
+  color: #f0f0ee;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 2rem;
+  font-weight: 500;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.site-title:hover {
+  color: #ffffff;
+}
+
+.site-title:focus-visible {
+  outline: 2px solid #448e85;
+  outline-offset: 4px;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 1000;
+  top: 8px;
+  left: 8px;
+  padding: 8px 12px;
+  color: #07110f;
+  background: #79b5ad;
+  border-radius: 4px;
+  font-weight: 700;
+  transform: translateY(-140%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+@media (max-width: 640px) {
+  .content {
+    width: min(100% - 24px, 860px);
+    padding-top: 14px;
+  }
+
+  .site-header {
+    padding-bottom: 10px;
+  }
+
+  .site-title {
+    font-size: 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
 }
