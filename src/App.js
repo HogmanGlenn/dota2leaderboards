@@ -14,6 +14,8 @@ import { getCountryName, getCountrySlug } from "./utils/countries";
 import "./App.css";
 
 const DEFAULT_PAGE_SIZE = 25;
+const HOME_ROUTE = { region: "europe", country: "all", pageSize: DEFAULT_PAGE_SIZE };
+const ROUTE_PARAMS = new Set(["region", "country", "limit"]);
 
 function getPageSizeOptions(maxRows, currentPageSize = DEFAULT_PAGE_SIZE) {
   const optionLimit = Math.min(maxRows, 5000);
@@ -43,16 +45,33 @@ const theme = createTheme({
 
 function readRoute() {
   const params = new URLSearchParams(window.location.search);
-  const requestedRegion = params.get("region") || "europe";
-  const requestedPageSize = Number(params.get("limit"));
-  const pageSize = Number.isInteger(requestedPageSize) && requestedPageSize > 0
-    ? requestedPageSize
-    : DEFAULT_PAGE_SIZE;
+  const requestedRegion = params.get("region");
+  const requestedCountry = params.get("country");
+  const requestedLimit = params.get("limit");
+  const requestedPageSize = Number(requestedLimit);
+  const hasUnknownParam = Array.from(params.keys()).some((param) => !ROUTE_PARAMS.has(param));
+  const hasDuplicateParam = Array.from(ROUTE_PARAMS).some((param) => params.getAll(param).length > 1);
+  const hasInvalidRegion = requestedRegion !== null && !Object.hasOwn(REGIONS, requestedRegion);
+  const hasInvalidCountry = requestedCountry === "";
+  const hasInvalidPageSize = requestedLimit !== null
+    && (!Number.isInteger(requestedPageSize) || requestedPageSize <= 0);
+
+  if (
+    window.location.pathname !== "/"
+    || hasUnknownParam
+    || hasDuplicateParam
+    || hasInvalidRegion
+    || hasInvalidCountry
+    || hasInvalidPageSize
+  ) {
+    window.history.replaceState({}, "", "/");
+    return { ...HOME_ROUTE };
+  }
 
   return {
-    region: Object.hasOwn(REGIONS, requestedRegion) ? requestedRegion : "europe",
-    country: params.get("country") || "all",
-    pageSize,
+    region: requestedRegion || HOME_ROUTE.region,
+    country: requestedCountry || HOME_ROUTE.country,
+    pageSize: requestedLimit === null ? HOME_ROUTE.pageSize : requestedPageSize,
   };
 }
 
@@ -148,6 +167,9 @@ function Dashboard() {
   }, [leaderboard.players]);
 
   const selectedCountry = countries.find(({ slug }) => slug === countrySlug) || null;
+  const navigationCountrySlug = countrySlug !== "all" && !selectedCountry && !isLoading
+    ? "all"
+    : countrySlug;
   const countryFilter = countrySlug === "all" ? null : countrySlug;
   const hasCountryFilter = countrySlug !== "all";
   const isInitialLoading = isLoading && leaderboard.players.length === 0;
@@ -167,6 +189,15 @@ function Dashboard() {
   );
 
   React.useEffect(() => {
+    if (!isLoading && leaderboard.players.length > 0 && countrySlug !== "all" && !selectedCountry) {
+      window.history.replaceState({}, "", "/");
+      setSearch("");
+      setRoute({ ...HOME_ROUTE });
+      trackPageView("/");
+    }
+  }, [countrySlug, isLoading, leaderboard.players.length, selectedCountry]);
+
+  React.useEffect(() => {
     if (leaderboard.players.length > 0 && pageSize !== DEFAULT_PAGE_SIZE && pageSize > leaderboard.players.length) {
       updateRoute({ pageSize: leaderboard.players.length }, true);
     }
@@ -180,7 +211,7 @@ function Dashboard() {
     if (nextRoute.pageSize !== DEFAULT_PAGE_SIZE) params.set("limit", String(nextRoute.pageSize));
 
     const query = params.toString();
-    const url = `${window.location.pathname}${query ? `?${query}` : ""}`;
+    const url = query ? `/?${query}` : "/";
     window.history[replace ? "replaceState" : "pushState"]({}, "", url);
     setRoute(nextRoute);
     trackPageView(url);
@@ -219,7 +250,7 @@ function Dashboard() {
           pageSizeOptions={pageSizeOptions}
           onPageSizeChange={changePageSize}
           isLoading={isLoading}
-          countrySlug={countrySlug}
+          countrySlug={navigationCountrySlug}
         />
         <Leaderboard
           players={filteredPlayers}

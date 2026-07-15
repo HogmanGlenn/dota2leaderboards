@@ -47,6 +47,46 @@ test("loads and renders leaderboard data", async () => {
   );
 });
 
+test("returns unknown paths to the homepage", async () => {
+  window.history.replaceState({}, "", "/not-a-real-page");
+
+  render(<App />);
+
+  expect(window.location.pathname).toBe("/");
+  expect(window.location.search).toBe("");
+  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
+});
+
+test("returns unknown query parameters to the homepage", async () => {
+  window.history.replaceState({}, "", "/?not-a-filter=value");
+
+  render(<App />);
+
+  expect(window.location.pathname).toBe("/");
+  expect(window.location.search).toBe("");
+  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
+});
+
+test("returns invalid query values to the homepage", async () => {
+  window.history.replaceState({}, "", "/?region=moon&limit=none");
+
+  render(<App />);
+
+  expect(window.location.pathname).toBe("/");
+  expect(window.location.search).toBe("");
+  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
+});
+
+test("returns an unknown country to the homepage after data loads", async () => {
+  window.history.replaceState({}, "", "/?country=atlantis");
+
+  render(<App />);
+
+  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
+  await waitFor(() => expect(window.location.search).toBe(""));
+  expect(window.location.pathname).toBe("/");
+});
+
 test("filters players by name or team", async () => {
   render(<App />);
   await screen.findByText("Top Carry");
