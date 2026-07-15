@@ -6,7 +6,13 @@ import "./Leaderboard.css";
 
 const publicUrl = process.env.PUBLIC_URL || "";
 const DEFAULT_ROW_HEIGHT = 18;
+const MOBILE_ROW_HEIGHT = 36;
 const OVERSCAN_ROWS = 24;
+const SWIPE_AXIS_THRESHOLD = 8;
+const SWIPE_EDGE_RESISTANCE = 0.28;
+const SWIPE_VELOCITY_THRESHOLD = 0.45;
+
+const createIdleSwipeState = () => ({ direction: 0, offset: 0, phase: "idle" });
 
 export function getFlagImageUrl(countryCode, size = "24x18") {
   if (!countryCode) return "";
@@ -23,6 +29,7 @@ function formatUpdatedAt(timestamp) {
 }
 
 function calculateRowHeight() {
+  if (window.innerWidth <= 640) return MOBILE_ROW_HEIGHT;
   return Math.min(52, Math.max(18, (window.innerHeight - 274) / 25));
 }
 
@@ -30,9 +37,9 @@ function LoadingRows() {
   return Array.from({ length: 25 }, (_, index) => (
     <div className="leaderboard-row" role="row" key={index}>
       <div className="leaderboard-cell rank-column" role="cell"><Skeleton width={30} /></div>
-      <div className="leaderboard-cell" role="cell"><Skeleton width={`${55 + (index % 3) * 12}%`} /></div>
+      <div className="leaderboard-cell player-column" role="cell"><Skeleton width={`${55 + (index % 3) * 12}%`} /></div>
       <div className="leaderboard-cell team-column" role="cell"><Skeleton width="55%" /></div>
-      <div className="leaderboard-cell" role="cell"><Skeleton width={72} /></div>
+      <div className="leaderboard-cell country-column" role="cell"><Skeleton width={72} /></div>
     </div>
   ));
 }
@@ -41,14 +48,14 @@ const PlayerRow = React.memo(function PlayerRow({
   player,
   relativeRank,
   showRelativeRank,
-  style,
+  translateY,
 }) {
   return (
     <div
       className="leaderboard-row leaderboard-row--player"
       data-player-row="true"
       role="row"
-      style={style}
+      style={{ transform: `translateY(${translateY}px)` }}
     >
       <div className="leaderboard-cell rank-column" role="cell">
         {showRelativeRank ? (
@@ -66,13 +73,13 @@ const PlayerRow = React.memo(function PlayerRow({
           </span>
         )}
       </div>
-      <div className="leaderboard-cell" role="cell">
+      <div className="leaderboard-cell player-column" role="cell">
         <span className="player-name">{player.name}</span>
       </div>
       <div className="leaderboard-cell team-column" role="cell">
         {player.teamTag ? <span className="team-tag">{player.teamTag}</span> : <span className="muted">—</span>}
       </div>
-      <div className="leaderboard-cell" role="cell">
+      <div className="leaderboard-cell country-column" role="cell">
         {player.countryCode ? (
           <span className="country-cell">
             <img src={getFlagImageUrl(player.countryCode)} alt="" />
@@ -98,9 +105,19 @@ export default function Leaderboard({
   const [page, setPage] = React.useState(0);
   const [rowHeight, setRowHeight] = React.useState(DEFAULT_ROW_HEIGHT);
   const [virtualRange, setVirtualRange] = React.useState({ start: 0, end: 80 });
+  const [swipe, setSwipe] = React.useState(createIdleSwipeState);
   const bodyRef = React.useRef(null);
+  const swipeStartRef = React.useRef(null);
+  const swipeFrameRef = React.useRef(0);
 
-  React.useEffect(() => setPage(0), [players, rowsPerPage]);
+  React.useEffect(() => {
+    setPage(0);
+    setSwipe(createIdleSwipeState());
+  }, [players, rowsPerPage]);
+
+  React.useEffect(() => () => {
+    window.cancelAnimationFrame(swipeFrameRef.current);
+  }, []);
 
   const maxPage = Math.max(0, Math.ceil(players.length / effectiveRowsPerPage) - 1);
   React.useEffect(() => {
@@ -112,6 +129,121 @@ export default function Leaderboard({
     [effectiveRowsPerPage, page, players, rowsPerPage]
   );
   const lastUpdated = formatUpdatedAt(updatedAt);
+
+  const handleTouchStart = React.useCallback((event) => {
+    if (swipe.phase !== "idle" || event.touches.length !== 1) {
+      swipeStartRef.current = null;
+      return;
+    }
+
+    const touch = event.touches[0];
+    swipeStartRef.current = {
+      axis: null,
+      lastTime: event.timeStamp,
+      lastX: touch.clientX,
+      offset: 0,
+      velocity: 0,
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+  }, [swipe.phase]);
+
+  const handleTouchMove = React.useCallback((event) => {
+    const start = swipeStartRef.current;
+    if (!start || event.touches.length !== 1) return;
+
+    const touch = event.touches[0];
+    const horizontalDistance = touch.clientX - start.x;
+    const verticalDistance = touch.clientY - start.y;
+
+    if (!start.axis) {
+      const horizontalIntent = Math.abs(horizontalDistance);
+      const verticalIntent = Math.abs(verticalDistance);
+      if (Math.max(horizontalIntent, verticalIntent) < SWIPE_AXIS_THRESHOLD) return;
+      start.axis = horizontalIntent > verticalIntent ? "horizontal" : "vertical";
+    }
+
+    if (start.axis !== "horizontal") return;
+
+    const pullingPastStart = page === 0 && horizontalDistance > 0;
+    const pullingPastEnd = page === maxPage && horizontalDistance < 0;
+    const offset = pullingPastStart || pullingPastEnd
+      ? horizontalDistance * SWIPE_EDGE_RESISTANCE
+      : horizontalDistance;
+    const elapsed = event.timeStamp - start.lastTime;
+
+    if (elapsed > 0) {
+      start.velocity = (touch.clientX - start.lastX) / elapsed;
+    }
+    start.lastTime = event.timeStamp;
+    start.lastX = touch.clientX;
+    start.offset = offset;
+    setSwipe({ direction: 0, offset, phase: "dragging" });
+  }, [maxPage, page]);
+
+  const handleTouchEnd = React.useCallback(() => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start || start.axis !== "horizontal") return;
+
+    const width = bodyRef.current?.getBoundingClientRect().width || window.innerWidth;
+    const direction = start.offset < 0 ? 1 : -1;
+    const pageExists = direction > 0 ? page < maxPage : page > 0;
+    const passedDistanceThreshold = Math.abs(start.offset) >= width * 0.2;
+    const passedVelocityThreshold = Math.abs(start.offset) >= 18
+      && Math.abs(start.velocity) >= SWIPE_VELOCITY_THRESHOLD
+      && Math.sign(start.velocity) === Math.sign(start.offset);
+
+    if (!pageExists || (!passedDistanceThreshold && !passedVelocityThreshold)) {
+      setSwipe({ direction: 0, offset: 0, phase: "settling" });
+      return;
+    }
+
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setPage((currentPage) => currentPage + direction);
+      setSwipe(createIdleSwipeState());
+      return;
+    }
+
+    setSwipe({
+      direction,
+      offset: direction > 0 ? -width : width,
+      phase: "outgoing",
+    });
+  }, [maxPage, page]);
+
+  const handleTouchCancel = React.useCallback(() => {
+    const wasDragging = swipeStartRef.current?.axis === "horizontal";
+    swipeStartRef.current = null;
+    if (wasDragging) setSwipe({ direction: 0, offset: 0, phase: "settling" });
+  }, []);
+
+  const handleSwipeTransitionEnd = React.useCallback((event) => {
+    if (event.target !== event.currentTarget) return;
+
+    if (swipe.phase === "outgoing") {
+      const { direction } = swipe;
+      const width = bodyRef.current?.getBoundingClientRect().width || window.innerWidth;
+      setPage((currentPage) => currentPage + direction);
+      setSwipe({
+        direction,
+        offset: direction > 0 ? width : -width,
+        phase: "positioning",
+      });
+
+      window.cancelAnimationFrame(swipeFrameRef.current);
+      swipeFrameRef.current = window.requestAnimationFrame(() => {
+        swipeFrameRef.current = window.requestAnimationFrame(() => {
+          setSwipe({ direction, offset: 0, phase: "incoming" });
+        });
+      });
+      return;
+    }
+
+    if (swipe.phase === "incoming" || swipe.phase === "settling") {
+      setSwipe(createIdleSwipeState());
+    }
+  }, [swipe]);
 
   React.useLayoutEffect(() => {
     const updateRowHeight = () => setRowHeight(calculateRowHeight());
@@ -200,16 +332,25 @@ export default function Leaderboard({
         <div className="leaderboard-head" role="rowgroup">
           <div className="leaderboard-row leaderboard-row--head" role="row">
             <div className="leaderboard-cell rank-column" role="columnheader">Rank</div>
-            <div className="leaderboard-cell" role="columnheader">Player</div>
+            <div className="leaderboard-cell player-column" role="columnheader">Player</div>
             <div className="leaderboard-cell team-column" role="columnheader">Team</div>
-            <div className="leaderboard-cell" role="columnheader">Country</div>
+            <div className="leaderboard-cell country-column" role="columnheader">Country</div>
           </div>
         </div>
         <div
-          className="leaderboard-body"
+          className={`leaderboard-body leaderboard-body--${swipe.phase}`}
+          data-testid="leaderboard-body"
           role="rowgroup"
           ref={bodyRef}
-          style={{ height: bodyHeight }}
+          style={{
+            height: bodyHeight,
+            transform: `translate3d(${swipe.offset}px, 0, 0)`,
+          }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchCancel}
+          onTransitionEnd={handleSwipeTransitionEnd}
         >
           {isLoading ? <LoadingRows /> : renderedPlayers.map((player, index) => {
             const absoluteIndex = virtualRange.start + index;
@@ -221,7 +362,7 @@ export default function Leaderboard({
                 player={player}
                 relativeRank={relativeRank}
                 showRelativeRank={showRelativeRank}
-                style={{ transform: `translateY(${absoluteIndex * rowHeight}px)` }}
+                translateY={absoluteIndex * rowHeight}
               />
             );
           })}

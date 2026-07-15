@@ -28,6 +28,13 @@ input {
   font: inherit;
 }
 
+@media (max-width: 640px) {
+  html,
+  body {
+    min-width: 0;
+  }
+}
+
 ::selection {
   color: #07110f;
   background: #79b5ad;

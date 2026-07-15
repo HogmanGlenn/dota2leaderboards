@@ -190,15 +190,33 @@
   }
 
   .filter-row {
-    display: flex;
+    display: grid;
     padding: 7px;
     align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr) 92px;
   }
 
-  .country-filter,
-  .search-filter,
-  .limit-filter {
+  .country-filter {
     width: 100%;
+    grid-column: 1 / -1;
+  }
+
+  .search-filter {
+    min-width: 0;
+    width: 100%;
+    grid-column: 1;
+  }
+
+  .limit-filter {
+    width: 92px;
+    grid-column: 2;
+  }
+
+  .limit-value {
+    gap: 4px;
+  }
+
+  .limit-filter .MuiSelect-icon {
+    right: 6px;
   }
 }

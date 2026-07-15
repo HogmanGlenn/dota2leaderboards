@@ -59,6 +59,7 @@
 
 @media (max-width: 640px) {
   .content {
+    --leaderboard-row-height: 36px;
     width: min(100% - 24px, 860px);
     padding-top: 14px;
   }
