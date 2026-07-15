@@ -3,17 +3,17 @@
   "name": "Dota 2 Leaderboards",
   "icons": [
     {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "dota-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     },
     {
-      "src": "logo192.png",
+      "src": "dota-logo-192.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "logo512.png",
+      "src": "dota-logo-512.png",
       "type": "image/png",
       "sizes": "512x512"
     }

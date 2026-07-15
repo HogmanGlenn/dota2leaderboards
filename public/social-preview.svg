@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">Dota 2 Leaderboards</title>
+  <desc id="description">Dota 2 logo beside the Dota 2 Leaderboards name.</desc>
+  <rect width="1200" height="630" fill="#101010" />
+  <g transform="translate(120 135) scale(.703125)">
+    <rect width="512" height="512" fill="#f0f0ee" />
+    <path d="m60 110 51-29 342 288-34 81-107-24Z" fill="#101010" />
+    <path d="m404 58 59 44-8 71-125-96Z" fill="#101010" transform="rotate(3.9 396 116)" />
+    <path d="m49 412 16-88 121 104-92 21Z" fill="#101010" />
+  </g>
+  <g fill="#f0f0ee" font-family="Arial, Helvetica, sans-serif">
+    <text x="550" y="284" font-size="104" font-weight="700" letter-spacing="2">DOTA 2</text>
+    <text x="550" y="370" font-size="55" font-weight="600" letter-spacing="5">LEADERBOARDS</text>
+  </g>
+  <rect x="550" y="408" width="470" height="4" fill="#f0f0ee" />
+</svg>

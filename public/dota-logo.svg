@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Dota 2 logo</title>
+  <rect width="512" height="512" fill="#f0f0ee" />
+  <path d="m60 110 51-29 342 288-34 81-107-24Z" fill="#101010" />
+  <path d="m404 58 59 44-8 71-125-96Z" fill="#101010" transform="rotate(3.9 396 116)" />
+  <path d="m49 412 16-88 121 104-92 21Z" fill="#101010" />
+</svg>
