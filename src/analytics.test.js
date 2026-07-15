@@ -30,7 +30,17 @@ test("initializes google analytics when a measurement id is configured", () => {
   expect(window.dataLayer[1]).toEqual([
     "config",
     "G-TEST123",
-    { page_path: "/?region=europe" },
+    { send_page_view: false },
+  ]);
+  expect(window.dataLayer[2]).toEqual([
+    "event",
+    "page_view",
+    {
+      page_title: "",
+      page_location: "http://localhost/?region=europe",
+      page_path: "/?region=europe",
+      send_to: "G-TEST123",
+    },
   ]);
 });
 
@@ -50,7 +60,16 @@ test("tracks route changes after analytics has initialized", () => {
   trackPageView("/?region=china");
 
   expect(window.dataLayer).toEqual([
-    ["config", "G-TEST123", { page_path: "/?region=china" }],
+    [
+      "event",
+      "page_view",
+      {
+        page_title: "",
+        page_location: "http://localhost/?region=china",
+        page_path: "/?region=china",
+        send_to: "G-TEST123",
+      },
+    ],
   ]);
 });
 
