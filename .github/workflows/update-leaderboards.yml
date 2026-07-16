@@ -2,7 +2,7 @@ name: Refresh leaderboard data
 
 on:
   schedule:
-    - cron: "14,44 * * * *"
+    - cron: "14 * * * *"
   workflow_dispatch:
 
 permissions:

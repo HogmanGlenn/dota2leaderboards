@@ -48,7 +48,7 @@ Run the updater unit tests with `python -m unittest discover -s scripts -p "test
 Two workflows are included:
 
 - `Build and deploy GitHub Pages` runs tests, builds the React app, and deploys it whenever `master` changes or the workflow is started manually.
-- `Refresh leaderboard data` runs every 30 minutes (and on demand), commits changed JSON, and calls the Pages deployment workflow directly.
+- `Refresh leaderboard data` runs at minute 14 of every hour (and on demand), commits changed JSON, and calls the Pages deployment workflow directly.
 
 Before the first deployment, open **Settings → Pages** in GitHub and set **Source** to **GitHub Actions**. The workflows use only the repository-provided `GITHUB_TOKEN`; no custom secrets are required.
 
