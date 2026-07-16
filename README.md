@@ -22,7 +22,7 @@ Filters are stored in normal query parameters, such as `?region=americas`. This 
 
 ## Refreshing leaderboard data
 
-The updater uses only Python's standard library. Each region is replaced only after a valid, non-empty API response. If a request fails or Dota returns an empty leaderboard, the existing JSON for that region is left untouched, including its timestamp.
+The updater uses only Python's standard library. Each region is replaced only after a valid, non-empty API response and receives a `fetched_at` timestamp for that successful refresh. If a request fails or Dota returns an empty leaderboard, the existing JSON for that region is left untouched, including its timestamp.
 
 ```bash
 python scripts/update_leaderboards.py

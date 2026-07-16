@@ -39,6 +39,6 @@ export async function getLeaderboardData(region = "europe", options = {}) {
 
   return {
     players,
-    updatedAt: Number(payload.time_posted) || null,
+    updatedAt: Number(payload.fetched_at) || Number(payload.time_posted) || null,
   };
 }

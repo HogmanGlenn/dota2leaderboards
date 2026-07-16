@@ -180,7 +180,7 @@ def update_once(
             continue
 
         print(f"{region}: validated {len(payload['leaderboard']):,} players")
-        payloads[region] = payload
+        payloads[region] = {**payload, "fetched_at": int(time.time())}
 
     if missing_existing_data:
         names = ", ".join(missing_existing_data)

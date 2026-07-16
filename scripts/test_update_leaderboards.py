@@ -66,6 +66,7 @@ class LeaderboardUpdaterTests(unittest.TestCase):
     def test_update_once_updates_good_regions_and_keeps_failed_regions(self):
         existing_payload = {
             "time_posted": 1_700_000_000,
+            "fetched_at": 1_700_000_100,
             "leaderboard": [{"rank": 1, "name": "Existing"}],
         }
         new_payload = {
@@ -82,7 +83,9 @@ class LeaderboardUpdaterTests(unittest.TestCase):
                     raise RuntimeError("empty response")
                 return new_payload
 
-            with mock.patch.object(updater, "fetch_region", side_effect=fake_fetch):
+            with mock.patch.object(
+                updater, "fetch_region", side_effect=fake_fetch
+            ), mock.patch.object(updater.time, "time", return_value=1_900_000_000):
                 result = updater.update_once(output_dir, ("europe", "americas"))
 
             europe = json.loads(
@@ -95,7 +98,28 @@ class LeaderboardUpdaterTests(unittest.TestCase):
             self.assertEqual(result.kept, ("europe",))
             self.assertIn("empty response", result.failures["europe"])
             self.assertEqual(europe, existing_payload)
-            self.assertEqual(americas, new_payload)
+            self.assertEqual(americas, {**new_payload, "fetched_at": 1_900_000_000})
+
+    def test_update_once_refreshes_timestamp_when_payload_is_unchanged(self):
+        api_payload = {
+            "time_posted": 1_700_000_000,
+            "leaderboard": [{"rank": 1, "name": "Player"}],
+        }
+        existing_payload = {**api_payload, "fetched_at": 1_700_000_100}
+
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory)
+            updater.write_payload(output_dir, "europe", existing_payload)
+
+            with mock.patch.object(
+                updater, "fetch_region", return_value=api_payload
+            ), mock.patch.object(updater.time, "time", return_value=1_900_000_000):
+                updater.update_once(output_dir, ("europe",))
+
+            written = json.loads(
+                (output_dir / "europe" / "v0001.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(written, {**api_payload, "fetched_at": 1_900_000_000})
 
     def test_update_once_fails_when_bad_region_has_no_previous_data(self):
         with tempfile.TemporaryDirectory() as directory:
