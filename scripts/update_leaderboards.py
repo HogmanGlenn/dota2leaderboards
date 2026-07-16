@@ -8,6 +8,7 @@ import os
 import socket
 import tempfile
 import time
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,8 @@ DEFAULT_ATTEMPTS = 4
 DEFAULT_TIMEOUT = 30
 DEFAULT_INTERVAL = 30
 MIN_EXPECTED_PLAYERS = 1
+HISTORY_INTERVAL_SECONDS = 8 * 60 * 60
+HISTORY_RETENTION_SECONDS = 30 * 24 * 60 * 60
 
 
 class PayloadValidationError(ValueError):
@@ -148,6 +151,170 @@ def write_payload(output_dir: Path, region: str, payload: dict[str, Any]) -> Non
         raise
 
 
+def normalize_player_name(name: str) -> str:
+    return " ".join(unicodedata.normalize("NFKC", name).strip().lower().split())
+
+
+def hash_base36(value: str) -> str:
+    hash_value = 0x811C9DC5
+    encoded = value.encode("utf-16le")
+    for index in range(0, len(encoded), 2):
+        code_unit = encoded[index] | (encoded[index + 1] << 8)
+        hash_value ^= code_unit
+        hash_value = (hash_value * 0x01000193) & 0xFFFFFFFF
+
+    digits = "0123456789abcdefghijklmnopqrstuvwxyz"
+    if hash_value == 0:
+        return "p0"
+
+    encoded_hash = ""
+    while hash_value:
+        hash_value, remainder = divmod(hash_value, 36)
+        encoded_hash = digits[remainder] + encoded_hash
+    return f"p{encoded_hash}"
+
+
+def create_player_key(region: str, player: dict[str, Any]) -> str:
+    country = player.get("country")
+    team_id = player.get("team_id")
+    parts = (
+        region,
+        normalize_player_name(player.get("name", "")),
+        "" if team_id is None else str(team_id),
+        country.lower() if isinstance(country, str) else "",
+    )
+    return hash_base36("|".join(parts))
+
+
+def history_path(output_dir: Path, region: str) -> Path:
+    return output_dir / region / "history.v0001.json"
+
+
+def read_history(output_dir: Path, region: str) -> dict[str, Any]:
+    target = history_path(output_dir, region)
+    if not target.is_file():
+        return {"version": 1, "interval_hours": 8, "retention_days": 30, "players": [], "samples": []}
+
+    with target.open("r", encoding="utf-8") as handle:
+        history = json.load(handle)
+
+    if not isinstance(history, dict):
+        raise PayloadValidationError(f"{region}: history is not a JSON object")
+    if not isinstance(history.get("players"), list) or not isinstance(history.get("samples"), list):
+        raise PayloadValidationError(f"{region}: history is not in the expected format")
+    return history
+
+
+def write_history(output_dir: Path, region: str, history: dict[str, Any]) -> None:
+    target_dir = output_dir / region
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = history_path(output_dir, region)
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=target_dir, prefix=".history-", suffix=".json"
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(history, handle, ensure_ascii=False, separators=(",", ":"))
+            handle.write("\n")
+        os.replace(temporary_name, target)
+    except BaseException:
+        try:
+            os.unlink(temporary_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def history_is_due(history: dict[str, Any], timestamp: int) -> bool:
+    samples = history.get("samples", [])
+    if not samples:
+        return True
+
+    latest = max(
+        (sample.get("t", 0) for sample in samples if isinstance(sample, dict)),
+        default=0,
+    )
+    return timestamp - int(latest) >= HISTORY_INTERVAL_SECONDS
+
+
+def build_rank_snapshot(region: str, payload: dict[str, Any]) -> dict[str, int]:
+    snapshot: dict[str, int] = {}
+    for player in payload["leaderboard"]:
+        player_key = create_player_key(region, player)
+        rank = int(player["rank"])
+        existing_rank = snapshot.get(player_key)
+        if existing_rank is None or rank < existing_rank:
+            snapshot[player_key] = rank
+    return snapshot
+
+
+def remap_history_samples(
+    history: dict[str, Any],
+    new_timestamp: int,
+    new_snapshot: dict[str, int],
+) -> dict[str, Any]:
+    old_players = history.get("players", [])
+    decoded_samples: list[tuple[int, dict[str, int]]] = []
+
+    for sample in history.get("samples", []):
+        if not isinstance(sample, dict) or not isinstance(sample.get("t"), int):
+            continue
+        indexes = sample.get("i", [])
+        ranks = sample.get("r", [])
+        if not isinstance(indexes, list) or not isinstance(ranks, list):
+            continue
+
+        ranks_by_key: dict[str, int] = {}
+        for player_index, rank in zip(indexes, ranks):
+            if (
+                isinstance(player_index, int)
+                and 0 <= player_index < len(old_players)
+                and isinstance(rank, int)
+            ):
+                ranks_by_key[str(old_players[player_index])] = rank
+        decoded_samples.append((sample["t"], ranks_by_key))
+
+    decoded_samples.append((new_timestamp, new_snapshot))
+    cutoff = new_timestamp - HISTORY_RETENTION_SECONDS
+    decoded_samples = [(timestamp, ranks) for timestamp, ranks in decoded_samples if timestamp >= cutoff]
+
+    player_indexes: dict[str, int] = {}
+    players: list[str] = []
+    encoded_samples: list[dict[str, Any]] = []
+    for timestamp, ranks_by_key in decoded_samples:
+        indexes: list[int] = []
+        ranks: list[int] = []
+        for player_key, rank in sorted(ranks_by_key.items(), key=lambda item: item[1]):
+            if player_key not in player_indexes:
+                player_indexes[player_key] = len(players)
+                players.append(player_key)
+            indexes.append(player_indexes[player_key])
+            ranks.append(rank)
+        encoded_samples.append({"t": timestamp, "i": indexes, "r": ranks})
+
+    return {
+        "version": 1,
+        "interval_hours": 8,
+        "retention_days": 30,
+        "players": players,
+        "samples": encoded_samples,
+    }
+
+
+def update_history(output_dir: Path, region: str, payload: dict[str, Any], timestamp: int) -> bool:
+    history = read_history(output_dir, region)
+    if not history_is_due(history, timestamp):
+        return False
+
+    next_history = remap_history_samples(
+        history,
+        timestamp,
+        build_rank_snapshot(region, payload),
+    )
+    write_history(output_dir, region, next_history)
+    return True
+
+
 def payload_path(output_dir: Path, region: str) -> Path:
     return output_dir / region / "v0001.json"
 
@@ -189,6 +356,8 @@ def update_once(
     for region, payload in payloads.items():
         write_payload(output_dir, region, payload)
         print(f"{region}: wrote {payload_path(output_dir, region)}")
+        if update_history(output_dir, region, payload, int(payload["fetched_at"])):
+            print(f"{region}: wrote {history_path(output_dir, region)}")
 
     kept = tuple(region for region in regions if region in failures)
     return UpdateResult(updated=tuple(payloads), kept=kept, failures=failures)

@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 105 1200 420" role="img" aria-labelledby="title description">
   <title id="title">Dota 2 Leaderboards</title>
   <desc id="description">Dota 2 logo beside the Dota 2 Leaderboards name.</desc>
-  <rect width="1200" height="630" fill="#101010" />
+  <rect y="105" width="1200" height="420" fill="#101010" />
   <g transform="translate(120 135) scale(.703125)">
     <rect width="512" height="512" fill="#f0f0ee" />
     <path d="m60 110 51-29 342 288-34 81-107-24Z" fill="#101010" />

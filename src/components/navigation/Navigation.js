@@ -1,13 +1,25 @@
 import React from "react";
 import ClearIcon from "@mui/icons-material/Clear";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import Autocomplete from "@mui/material/Autocomplete";
+import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import MenuItem from "@mui/material/MenuItem";
+import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import { REGIONS } from "../../constants";
-import { getFlagImageUrl } from "../leaderboard/Leaderboard";
+import Flag from "../flag/Flag";
 import "./Navigation.css";
+
+const HISTORY_OPTION_LABELS = {
+  off: "Off",
+  "8h": "8 hours",
+  "24h": "24 hours",
+  "7d": "7 days",
+  "30d": "30 days",
+};
 
 export default function Navigation({
   region,
@@ -22,6 +34,22 @@ export default function Navigation({
   onPageSizeChange,
   isLoading,
   countrySlug,
+  pinnedOnly,
+  onPinnedOnlyChange,
+  pinnedCount,
+  onClearPinned,
+  historyWindow,
+  historyOptions,
+  onHistoryWindowChange,
+  historyStatus,
+  onShare,
+  shareStatus,
+  selectionName,
+  onSelectionNameChange,
+  onSaveSelection,
+  savedSelections,
+  onLoadSelection,
+  saveStatus,
 }) {
   const countryValue = selectedCountry || (
     countrySlug !== "all"
@@ -33,6 +61,7 @@ export default function Navigation({
       : null
   );
   const [countryInput, setCountryInput] = React.useState(countryValue?.name || "");
+  const [advancedOpen, setAdvancedOpen] = React.useState(false);
 
   React.useEffect(() => {
     setCountryInput(countryValue?.name || "");
@@ -80,7 +109,7 @@ export default function Navigation({
           size="small"
           renderOption={(props, option) => (
             <li {...props} key={option.countryCode}>
-              <img className="flag" src={getFlagImageUrl(option.countryCode)} alt="" />
+              <Flag countryCode={option.countryCode} className="flag" />
               <span>{option.name}</span>
             </li>
           )}
@@ -162,7 +191,125 @@ export default function Navigation({
             <MenuItem key={option} value={option}>{option}</MenuItem>
           ))}
         </TextField>
+        <button
+          className={advancedOpen ? "more-options-toggle more-options-toggle--active" : "more-options-toggle"}
+          type="button"
+          aria-expanded={advancedOpen}
+          aria-label="More options"
+          onClick={() => setAdvancedOpen((open) => !open)}
+        >
+          <ExpandMoreIcon fontSize="small" />
+          <span>More</span>
+        </button>
       </div>
+
+      {advancedOpen && (
+        <div className="more-options" data-testid="more-options-panel">
+        <div className="more-options__panel">
+          <div className="option-group option-group--pins">
+            <label className="pinned-toggle">
+              <span>Filter pinned</span>
+              <Switch
+                checked={pinnedOnly}
+                onChange={(event) => onPinnedOnlyChange(event.target.checked)}
+                size="small"
+                inputProps={{ "aria-label": "Filter pinned" }}
+              />
+            </label>
+            <Button
+              className="clear-pins"
+              variant="outlined"
+              size="small"
+              disabled={pinnedCount === 0}
+              onClick={onClearPinned}
+            >
+              Clear pinned
+            </Button>
+            <span className="pin-count" aria-live="polite">
+              <strong>{pinnedCount}</strong> pinned
+            </span>
+          </div>
+          <div className="option-group option-group--view">
+            <TextField
+              className="history-filter"
+              select
+              size="small"
+              label="Show rank change"
+              value={historyWindow}
+              onChange={(event) => onHistoryWindowChange(event.target.value)}
+              inputProps={{ "aria-label": "Show rank change" }}
+              SelectProps={{
+                MenuProps: {
+                  transitionDuration: 0,
+                  disableScrollLock: true,
+                },
+              }}
+            >
+              {historyOptions.map((option) => (
+                <MenuItem key={option} value={option}>
+                  {HISTORY_OPTION_LABELS[option] || option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </div>
+          <div className="selection-row">
+            <TextField
+              className="selection-name"
+              size="small"
+              label="Selection name"
+              value={selectionName}
+              onChange={(event) => onSelectionNameChange(event.target.value)}
+              inputProps={{ maxLength: 40, "aria-label": "Selection name" }}
+            />
+            <div className="selection-actions">
+              <Button
+                className={saveStatus === "Saved" ? "save-selection save-selection--saved" : "save-selection"}
+                variant="outlined"
+                size="small"
+                onClick={onSaveSelection}
+              >
+                Save
+              </Button>
+              <TextField
+                className="saved-selection"
+                select
+                size="small"
+                value=""
+                onChange={(event) => onLoadSelection(event.target.value)}
+                inputProps={{ "aria-label": "Saved selections" }}
+                SelectProps={{
+                  displayEmpty: true,
+                  MenuProps: {
+                    transitionDuration: 0,
+                    disableScrollLock: true,
+                  },
+                  renderValue: () => "Load saved",
+                }}
+              >
+                {savedSelections.length === 0 ? (
+                  <MenuItem disabled value="">No saved selections</MenuItem>
+                ) : savedSelections.map((selection) => (
+                  <MenuItem key={selection.id} value={selection.id}>{selection.name}</MenuItem>
+                ))}
+              </TextField>
+              <Button
+                className="share-view"
+                variant="contained"
+                size="small"
+                startIcon={<ContentCopyIcon fontSize="small" />}
+                onClick={onShare}
+                title={shareStatus || ""}
+              >
+                Copy shareable link
+              </Button>
+            </div>
+          </div>
+          {historyStatus && (
+            <span className="options-status">{historyStatus}</span>
+          )}
+        </div>
+        </div>
+      )}
     </section>
   );
 }

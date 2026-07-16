@@ -21,11 +21,21 @@ body {
   background: #121212;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+body * {
+  user-select: none;
 }
 
 button,
 input {
   font: inherit;
+}
+
+input,
+textarea {
+  user-select: text;
 }
 
 @media (max-width: 640px) {
