@@ -1,4 +1,5 @@
 import { Player } from "../model/Player";
+import { createPlayerKey } from "../utils/playerKey";
 import { getCountrySlug } from "../utils/countries";
 
 const publicUrl = process.env.PUBLIC_URL || "";
@@ -31,7 +32,8 @@ export async function getLeaderboardData(region = "europe", options = {}) {
         entry.team_id,
         teamTag,
         getCountrySlug(countryCode),
-        `${name} ${teamTag}`.toLocaleLowerCase()
+        `${name} ${teamTag}`.toLocaleLowerCase(),
+        createPlayerKey(region, { name, teamId: entry.team_id, countryCode })
       );
     })
     .filter((player) => Number.isFinite(player.rank))

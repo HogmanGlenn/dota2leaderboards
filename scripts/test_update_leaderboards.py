@@ -121,6 +121,95 @@ class LeaderboardUpdaterTests(unittest.TestCase):
             )
             self.assertEqual(written, {**api_payload, "fetched_at": 1_900_000_000})
 
+    def test_player_key_generation_is_deterministic(self):
+        player = {"rank": 1, "name": "  Player   One ", "team_id": 42, "country": "FI"}
+
+        self.assertEqual(
+            updater.create_player_key("europe", player),
+            updater.create_player_key("europe", {**player, "name": "player one"}),
+        )
+        self.assertNotEqual(
+            updater.create_player_key("europe", player),
+            updater.create_player_key("americas", player),
+        )
+        self.assertEqual(updater.create_player_key("europe", player), "pge6p8b")
+        self.assertEqual(
+            updater.create_player_key(
+                "europe",
+                {"name": "医者watson`", "team_id": 9823272, "country": "kz"},
+            ),
+            "p1o9lax3",
+        )
+
+    def test_update_once_creates_separate_history_file(self):
+        api_payload = {
+            "time_posted": 1_700_000_000,
+            "leaderboard": [{"rank": 1, "name": "Player", "team_id": 42, "country": "fi"}],
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory)
+
+            with mock.patch.object(
+                updater, "fetch_region", return_value=api_payload
+            ), mock.patch.object(updater.time, "time", return_value=1_900_000_000):
+                updater.update_once(output_dir, ("europe",))
+
+            current = json.loads(
+                (output_dir / "europe" / "v0001.json").read_text(encoding="utf-8")
+            )
+            history = json.loads(
+                (output_dir / "europe" / "history.v0001.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(current, {**api_payload, "fetched_at": 1_900_000_000})
+            self.assertEqual(history["interval_hours"], 8)
+            self.assertEqual(history["samples"][0]["t"], 1_900_000_000)
+            self.assertEqual(history["samples"][0]["r"], [1])
+
+    def test_history_appends_only_after_eight_hours(self):
+        payload = {
+            "leaderboard": [{"rank": 1, "name": "Player", "team_id": 42, "country": "fi"}],
+            "fetched_at": 1_900_000_000,
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory)
+            self.assertTrue(updater.update_history(output_dir, "europe", payload, 1_900_000_000))
+            self.assertFalse(updater.update_history(output_dir, "europe", payload, 1_900_000_000 + 60))
+            self.assertTrue(
+                updater.update_history(
+                    output_dir,
+                    "europe",
+                    {**payload, "leaderboard": [{**payload["leaderboard"][0], "rank": 2}]},
+                    1_900_000_000 + updater.HISTORY_INTERVAL_SECONDS,
+                )
+            )
+
+            history = json.loads(
+                (output_dir / "europe" / "history.v0001.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual([sample["r"][0] for sample in history["samples"]], [1, 2])
+
+    def test_history_is_pruned_to_thirty_days(self):
+        player = {"rank": 1, "name": "Player", "team_id": 42, "country": "fi"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory)
+            updater.update_history(
+                output_dir,
+                "europe",
+                {"leaderboard": [player]},
+                1_900_000_000 - updater.HISTORY_RETENTION_SECONDS - updater.HISTORY_INTERVAL_SECONDS,
+            )
+            updater.update_history(output_dir, "europe", {"leaderboard": [player]}, 1_900_000_000)
+
+            history = json.loads(
+                (output_dir / "europe" / "history.v0001.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(len(history["samples"]), 1)
+            self.assertEqual(history["samples"][0]["t"], 1_900_000_000)
+
     def test_update_once_fails_when_bad_region_has_no_previous_data(self):
         with tempfile.TemporaryDirectory() as directory:
             with mock.patch.object(updater, "fetch_region", side_effect=RuntimeError("timeout")):
@@ -167,6 +256,36 @@ class LeaderboardUpdaterTests(unittest.TestCase):
                 (output_dir / "europe" / "v0001.json").read_text(encoding="utf-8")
             )
             self.assertEqual(written["leaderboard"][0]["name"], "Recovered")
+
+    def test_failed_refresh_keeps_existing_history(self):
+        existing_payload = {
+            "time_posted": 1_700_000_000,
+            "leaderboard": [{"rank": 1, "name": "Existing"}],
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory)
+            updater.write_payload(output_dir, "europe", existing_payload)
+            updater.write_history(
+                output_dir,
+                "europe",
+                {
+                    "version": 1,
+                    "interval_hours": 8,
+                    "retention_days": 30,
+                    "players": ["p123"],
+                    "samples": [{"t": 1_700_000_000, "i": [0], "r": [1]}],
+                },
+            )
+
+            with mock.patch.object(updater, "fetch_region", side_effect=RuntimeError("timeout")):
+                result = updater.update_once(output_dir, ("europe",))
+
+            history = json.loads(
+                (output_dir / "europe" / "history.v0001.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(result.kept, ("europe",))
+            self.assertEqual(history["samples"], [{"t": 1_700_000_000, "i": [0], "r": [1]}])
 
 
 if __name__ == "__main__":

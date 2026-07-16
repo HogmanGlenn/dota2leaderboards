@@ -1,10 +1,10 @@
 import React from "react";
 import Button from "@mui/material/Button";
 import Skeleton from "@mui/material/Skeleton";
+import Flag from "../flag/Flag";
 import { getCountryName } from "../../utils/countries";
 import "./Leaderboard.css";
 
-const publicUrl = process.env.PUBLIC_URL || "";
 const DEFAULT_ROW_HEIGHT = 18;
 const MOBILE_ROW_HEIGHT = 36;
 const OVERSCAN_ROWS = 24;
@@ -13,11 +13,6 @@ const SWIPE_EDGE_RESISTANCE = 0.28;
 const SWIPE_VELOCITY_THRESHOLD = 0.45;
 
 const createIdleSwipeState = () => ({ direction: 0, offset: 0, phase: "idle" });
-
-export function getFlagImageUrl(countryCode, size = "24x18") {
-  if (!countryCode) return "";
-  return `${publicUrl}/flags/${size}/${countryCode.toLowerCase()}.png`;
-}
 
 function formatUpdatedAt(timestamp) {
   if (!timestamp) return "";
@@ -48,28 +43,67 @@ const PlayerRow = React.memo(function PlayerRow({
   player,
   relativeRank,
   showRelativeRank,
+  rankDelta,
+  showRankDelta,
+  isPinned,
+  onTogglePinned,
   translateY,
 }) {
+  const togglePinned = () => onTogglePinned(player);
+  const rankDeltaType = rankDelta?.type || "missing";
+  const rankDeltaLabel = rankDelta?.label || "—";
+  const rankDeltaElement = showRankDelta ? (
+    <span
+      className={[
+        "rank-delta",
+        `rank-delta--${rankDeltaType}`,
+        rankDelta ? "" : "rank-delta--pending",
+      ].filter(Boolean).join(" ")}
+      aria-hidden={rankDelta ? undefined : "true"}
+    >
+      {rankDeltaLabel}
+    </span>
+  ) : null;
+  const handleKeyDown = (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    togglePinned();
+  };
+
   return (
     <div
-      className="leaderboard-row leaderboard-row--player"
+      className={[
+        "leaderboard-row leaderboard-row--player",
+        isPinned ? "leaderboard-row--pinned" : "",
+      ].filter(Boolean).join(" ")}
       data-player-row="true"
       role="row"
+      tabIndex={0}
+      aria-selected={isPinned}
       style={{ transform: `translateY(${translateY}px)` }}
+      onClick={togglePinned}
+      onKeyDown={handleKeyDown}
     >
       <div className="leaderboard-cell rank-column" role="cell">
+        {isPinned && <span className="pin-marker" aria-hidden="true">●</span>}
         {showRelativeRank ? (
           <span className="rank-pair">
             <span className="rank-relative">
               {relativeRank.toLocaleString()}
             </span>
-            <span className={player.rank <= 3 ? "rank rank--top" : "rank"}>
-              {player.rank.toLocaleString()}
+            <span className="rank-with-change">
+              <span className={player.rank <= 3 ? "rank rank--top" : "rank"}>
+                {player.rank.toLocaleString()}
+              </span>
+              {rankDeltaElement}
             </span>
           </span>
         ) : (
-          <span className={player.rank <= 3 ? "rank rank--top" : "rank"}>
-            {player.rank.toLocaleString()}
+          <span className="rank-with-change">
+            <span className={player.rank <= 3 ? "rank rank--top" : "rank"}>
+              {player.rank.toLocaleString()}
+            </span>
+            {rankDeltaElement}
           </span>
         )}
       </div>
@@ -82,7 +116,7 @@ const PlayerRow = React.memo(function PlayerRow({
       <div className="leaderboard-cell country-column" role="cell">
         {player.countryCode ? (
           <span className="country-cell">
-            <img src={getFlagImageUrl(player.countryCode)} alt="" />
+            <Flag countryCode={player.countryCode} />
             <span>{getCountryName(player.countryCode)}</span>
           </span>
         ) : null}
@@ -101,6 +135,10 @@ export default function Leaderboard({
   error,
   onRetry,
   hasFilters,
+  rankDeltas = new Map(),
+  showRankDelta = false,
+  isPlayerPinned = () => false,
+  onTogglePinned = () => {},
 }) {
   const [page, setPage] = React.useState(0);
   const [rowHeight, setRowHeight] = React.useState(DEFAULT_ROW_HEIGHT);
@@ -324,6 +362,7 @@ export default function Leaderboard({
       className={[
         "leaderboard-card",
         showRelativeRank ? "leaderboard-card--relative" : "",
+        showRankDelta ? "leaderboard-card--history" : "",
       ].filter(Boolean).join(" ")}
       aria-label="Player rankings"
       aria-busy={isLoading}
@@ -362,6 +401,10 @@ export default function Leaderboard({
                 player={player}
                 relativeRank={relativeRank}
                 showRelativeRank={showRelativeRank}
+                rankDelta={rankDeltas.get(player.playerKey)}
+                showRankDelta={showRankDelta}
+                isPinned={isPlayerPinned(player)}
+                onTogglePinned={onTogglePinned}
                 translateY={absoluteIndex * rowHeight}
               />
             );
@@ -379,7 +422,7 @@ export default function Leaderboard({
             >
               &lt;
             </button>
-            <span>Page {page + 1}</span>
+            <span className="page-indicator" aria-live="polite">Page {page + 1}</span>
             <button
               type="button"
               onClick={() => setPage((currentPage) => Math.min(maxPage, currentPage + 1))}

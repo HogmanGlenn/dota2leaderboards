@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
+import Flag from "./components/flag/Flag";
 import Leaderboard from "./components/leaderboard/Leaderboard";
+import { createPlayerKey } from "./utils/playerKey";
+import { PIN_STORAGE_KEY } from "./utils/pins";
+import { SAVED_SELECTIONS_KEY } from "./utils/savedSelections";
 
 const payload = {
   time_posted: 1740996781,
@@ -26,6 +30,8 @@ function createPayload(size) {
 
 beforeEach(() => {
   window.history.replaceState({}, "", "/");
+  window.localStorage.clear();
+  navigator.clipboard = { writeText: jest.fn().mockResolvedValue(undefined) };
   global.fetch = jest.fn().mockResolvedValue({
     ok: true,
     status: 200,
@@ -46,6 +52,27 @@ test("loads and renders leaderboard data", async () => {
     expect.stringContaining("/data/europe/v0001.json"),
     expect.objectContaining({ signal: undefined })
   );
+});
+
+test("renders flags from the public SVG asset path", () => {
+  render(<Flag countryCode="FI" />);
+
+  const flag = document.querySelector(".flag-image");
+  expect(flag).toBeInTheDocument();
+  expect(flag).toHaveAttribute("src", expect.stringContaining("/flags/4x3/fi.svg"));
+});
+
+test("matches backend player key generation fixtures", () => {
+  expect(createPlayerKey("europe", {
+    name: "医者watson`",
+    teamId: 9823272,
+    countryCode: "KZ",
+  })).toBe("p1o9lax3");
+  expect(createPlayerKey("europe", {
+    name: "  Player   One ",
+    teamId: 42,
+    countryCode: "FI",
+  })).toBe("pge6p8b");
 });
 
 test("returns unknown paths to the homepage", async () => {
@@ -331,4 +358,223 @@ test("shows a retry action when loading fails", async () => {
 
   expect(await screen.findByText(/couldn't load this leaderboard/i)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+});
+
+test("reveals advanced options", async () => {
+  render(<App />);
+  await screen.findByText("Top Carry");
+
+  await userEvent.click(screen.getByRole("button", { name: "More options" }));
+
+  expect(screen.getByLabelText("Filter pinned")).toBeInTheDocument();
+  expect(screen.getByLabelText("Show rank change")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /copy shareable link/i })).toBeInTheDocument();
+});
+
+test("clicking a player toggles a local pin and pinned-only filtering", async () => {
+  render(<App />);
+  await screen.findByText("Top Carry");
+
+  await userEvent.click(screen.getByText("Top Carry"));
+  expect(JSON.parse(window.localStorage.getItem(PIN_STORAGE_KEY))).toHaveLength(1);
+
+  await userEvent.click(screen.getByRole("button", { name: "More options" }));
+  await userEvent.click(screen.getByLabelText("Filter pinned"));
+
+  await waitFor(() => expect(screen.queryByText("Mid Player")).not.toBeInTheDocument());
+  expect(screen.getByText("Top Carry")).toBeInTheDocument();
+});
+
+test("shared pins restore pinned-only views without overwriting local pins", async () => {
+  const sharedKey = createPlayerKey("europe", {
+    name: "Top Carry",
+    teamId: 10,
+    countryCode: "FI",
+  });
+  window.localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify([{
+    region: "europe",
+    playerKey: "pexisting",
+    name: "Existing",
+    teamTag: "",
+    countryCode: "",
+    rank: 99,
+  }]));
+  window.history.replaceState({}, "", `/?p=1&pins=europe.${sharedKey}`);
+
+  render(<App />);
+
+  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
+  expect(screen.queryByText("Mid Player")).not.toBeInTheDocument();
+  expect(JSON.parse(window.localStorage.getItem(PIN_STORAGE_KEY))[0].playerKey).toBe("pexisting");
+});
+
+test("shared pins are dropped when leaving the shared pinned view", async () => {
+  const sharedKey = createPlayerKey("europe", {
+    name: "Top Carry",
+    teamId: 10,
+    countryCode: "FI",
+  });
+  window.history.replaceState({}, "", `/?p=1&pins=europe.${sharedKey}`);
+
+  render(<App />);
+  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
+  expect(screen.queryByText("Mid Player")).not.toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("button", { name: "More options" }));
+  await userEvent.click(screen.getByLabelText("Filter pinned"));
+
+  await waitFor(() => expect(window.location.search).not.toContain("pins="));
+  expect(screen.getByText("Mid Player")).toBeInTheDocument();
+});
+
+test("saves the current selection with a user name", async () => {
+  render(<App />);
+  await screen.findByText("Top Carry");
+
+  await userEvent.click(screen.getByText("Top Carry"));
+  await userEvent.click(screen.getByRole("button", { name: "More options" }));
+  await userEvent.type(screen.getByLabelText("Selection name"), "My carries");
+  await userEvent.click(screen.getByRole("button", { name: /save/i }));
+
+  const saved = JSON.parse(window.localStorage.getItem(SAVED_SELECTIONS_KEY));
+  expect(saved[0].name).toBe("My carries");
+  expect(saved[0].pins).toHaveLength(1);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toHaveClass("save-selection--saved"));
+});
+
+test("rank history loads lazily and renders deltas", async () => {
+  const topCarryKey = createPlayerKey("europe", {
+    name: "Top Carry",
+    teamId: 10,
+    countryCode: "FI",
+  });
+  const historyPayload = {
+    version: 1,
+    interval_hours: 8,
+    retention_days: 30,
+    players: [topCarryKey],
+    samples: [{
+      t: payload.time_posted - 8 * 60 * 60,
+      i: [0],
+      r: [5],
+    }],
+  };
+  global.fetch = jest.fn((url) => Promise.resolve({
+    ok: true,
+    status: 200,
+    json: async () => (String(url).includes("history.v0001.json") ? historyPayload : payload),
+  }));
+
+  render(<App />);
+  await screen.findByText("Top Carry");
+
+  expect(fetch).not.toHaveBeenCalledWith(
+    expect.stringContaining("history.v0001.json"),
+    expect.any(Object)
+  );
+
+  await userEvent.click(screen.getByRole("button", { name: "More options" }));
+  await userEvent.click(screen.getByLabelText("Show rank change"));
+  await userEvent.click(screen.getByRole("option", { name: "8 hours" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+    expect.stringContaining("/data/europe/history.v0001.json"),
+    expect.any(Object)
+  ));
+  expect(await screen.findAllByText("+4")).toHaveLength(1);
+});
+
+test("does not show stale rank deltas while switching regions", async () => {
+  const topCarryKey = createPlayerKey("europe", {
+    name: "Top Carry",
+    teamId: 10,
+    countryCode: "FI",
+  });
+  const americasPlayerKey = createPlayerKey("americas", {
+    name: "Americas Player",
+    teamId: 20,
+    countryCode: "US",
+  });
+  const europeHistory = {
+    version: 1,
+    interval_hours: 8,
+    retention_days: 30,
+    players: [topCarryKey],
+    samples: [{
+      t: payload.time_posted - 8 * 60 * 60,
+      i: [0],
+      r: [5],
+    }],
+  };
+  let resolveAmericas;
+  const americasRequest = new Promise((resolve) => {
+    resolveAmericas = resolve;
+  });
+  let resolveAmericasHistory;
+  const americasHistoryRequest = new Promise((resolve) => {
+    resolveAmericasHistory = resolve;
+  });
+  const americasPayload = {
+    time_posted: payload.time_posted,
+    leaderboard: [{ rank: 1, name: "Americas Player", team_id: 20, team_tag: "AM", country: "us" }],
+  };
+  const americasHistory = {
+    version: 1,
+    interval_hours: 8,
+    retention_days: 30,
+    players: [americasPlayerKey],
+    samples: [{
+      t: payload.time_posted - 8 * 60 * 60,
+      i: [0],
+      r: [7],
+    }],
+  };
+
+  global.fetch = jest.fn((url) => {
+    const href = String(url);
+    if (href.includes("/data/europe/history.v0001.json")) {
+      return Promise.resolve({ ok: true, status: 200, json: async () => europeHistory });
+    }
+    if (href.includes("/data/americas/v0001.json")) return americasRequest;
+    if (href.includes("/data/americas/history.v0001.json")) return americasHistoryRequest;
+    return Promise.resolve({ ok: true, status: 200, json: async () => payload });
+  });
+
+  window.history.replaceState({}, "", "/?h=8h");
+  render(<App />);
+  expect(await screen.findAllByText("+4")).toHaveLength(1);
+
+  await userEvent.click(screen.getByRole("button", { name: "Americas" }));
+
+  expect(screen.getByText("+4")).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Player rankings" })).toHaveClass("leaderboard-card--history");
+
+  resolveAmericas({
+    ok: true,
+    status: 200,
+    json: async () => americasPayload,
+  });
+  expect(await screen.findByText("Americas Player")).toBeInTheDocument();
+  expect(screen.queryByText("+4")).not.toBeInTheDocument();
+
+  resolveAmericasHistory({
+    ok: true,
+    status: 200,
+    json: async () => americasHistory,
+  });
+  expect(await screen.findByText("+6")).toBeInTheDocument();
+});
+
+test("share copies a compact personalized link", async () => {
+  render(<App />);
+  await screen.findByText("Top Carry");
+
+  await userEvent.click(screen.getByText("Top Carry"));
+  await userEvent.click(screen.getByRole("button", { name: "More options" }));
+  await userEvent.click(screen.getByRole("button", { name: /copy shareable link/i }));
+
+  await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+    expect.stringContaining("pins=europe.")
+  ));
+  await waitFor(() => expect(screen.getByRole("button", { name: /copy shareable link/i })).toHaveAttribute("title", "Copied"));
 });
