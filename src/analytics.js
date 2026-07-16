@@ -10,18 +10,22 @@ function currentPath() {
 
 export function initializeAnalytics() {
   const id = measurementId();
-  if (!id || document.getElementById(GA_SCRIPT_ID)) return;
+  if (!id) return;
 
   window.dataLayer = window.dataLayer || [];
-  window.gtag = function gtag(...args) {
-    window.dataLayer.push(args);
-  };
+  window.gtag =
+    window.gtag ||
+    function gtag() {
+      window.dataLayer.push(arguments);
+    };
 
-  const script = document.createElement("script");
-  script.id = GA_SCRIPT_ID;
-  script.async = true;
-  script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`;
-  document.head.appendChild(script);
+  if (!document.getElementById(GA_SCRIPT_ID)) {
+    const script = document.createElement("script");
+    script.id = GA_SCRIPT_ID;
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`;
+    document.head.appendChild(script);
+  }
 
   window.gtag("js", new Date());
   window.gtag("config", id, { send_page_view: false });

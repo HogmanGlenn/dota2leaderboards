@@ -2,6 +2,10 @@ import { initializeAnalytics, sendWebVital, trackPageView } from "./analytics";
 
 const originalMeasurementId = process.env.REACT_APP_GA_MEASUREMENT_ID;
 
+function dataLayerEntries() {
+  return window.dataLayer.map((entry) => Array.from(entry));
+}
+
 beforeEach(() => {
   document.head.innerHTML = "";
   delete window.dataLayer;
@@ -27,12 +31,12 @@ test("initializes google analytics when a measurement id is configured", () => {
     "https://www.googletagmanager.com/gtag/js?id=G-TEST123"
   );
   expect(window.dataLayer[0][0]).toBe("js");
-  expect(window.dataLayer[1]).toEqual([
+  expect(dataLayerEntries()[1]).toEqual([
     "config",
     "G-TEST123",
     { send_page_view: false },
   ]);
-  expect(window.dataLayer[2]).toEqual([
+  expect(dataLayerEntries()[2]).toEqual([
     "event",
     "page_view",
     {
@@ -53,13 +57,33 @@ test("does nothing without a measurement id", () => {
   expect(window.gtag).toBeUndefined();
 });
 
+test("initializes analytics when the google script tag already exists", () => {
+  const script = document.createElement("script");
+  script.id = "google-analytics-script";
+  script.async = true;
+  script.src = "https://www.googletagmanager.com/gtag/js?id=G-TEST123";
+  document.head.appendChild(script);
+
+  initializeAnalytics();
+
+  expect(document.querySelectorAll("#google-analytics-script")).toHaveLength(1);
+  expect(typeof window.gtag).toBe("function");
+  expect(dataLayerEntries()[1]).toEqual([
+    "config",
+    "G-TEST123",
+    { send_page_view: false },
+  ]);
+  expect(dataLayerEntries()[2][0]).toBe("event");
+  expect(dataLayerEntries()[2][1]).toBe("page_view");
+});
+
 test("tracks route changes after analytics has initialized", () => {
   initializeAnalytics();
   window.dataLayer.length = 0;
 
   trackPageView("/?region=china");
 
-  expect(window.dataLayer).toEqual([
+  expect(dataLayerEntries()).toEqual([
     [
       "event",
       "page_view",
@@ -79,7 +103,7 @@ test("sends web vitals as non-interaction events", () => {
 
   sendWebVital({ name: "CLS", id: "metric-id", value: 0.1234 });
 
-  expect(window.dataLayer).toEqual([
+  expect(dataLayerEntries()).toEqual([
     [
       "event",
       "CLS",
