@@ -39,6 +39,13 @@ export async function getLeaderboardData(region = "europe", options = {}) {
     .filter((player) => Number.isFinite(player.rank))
     .sort((a, b) => a.rank - b.rank);
 
+  const findKeyCounts = new Map();
+  players.forEach((player) => {
+    const occurrence = findKeyCounts.get(player.playerKey) || 0;
+    findKeyCounts.set(player.playerKey, occurrence + 1);
+    player.findKey = occurrence === 0 ? player.playerKey : `${player.playerKey}-${occurrence}`;
+  });
+
   return {
     players,
     updatedAt: Number(payload.fetched_at) || Number(payload.time_posted) || null,
