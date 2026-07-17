@@ -2,22 +2,6 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://dota2leaderboards.com/</loc>
-    <changefreq>hourly</changefreq>
-    <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>https://dota2leaderboards.com/?region=americas</loc>
-    <changefreq>hourly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://dota2leaderboards.com/?region=china</loc>
-    <changefreq>hourly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://dota2leaderboards.com/?region=se_asia</loc>
-    <changefreq>hourly</changefreq>
-    <priority>0.8</priority>
+    <lastmod>2026-07-17T14:44:23Z</lastmod>
   </url>
 </urlset>
