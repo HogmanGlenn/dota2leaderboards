@@ -882,7 +882,7 @@ test("native find uses rank buckets for first-row page boundaries", async () => 
 
   expect(playerRows).toHaveLength(25);
   expect(playerRows[0]).toHaveTextContent("therealsad-");
-  expect(playerRows[0]).toHaveTextContent(/1\s?600/);
+  expect(playerRows[0].querySelector(".rank").textContent.replace(/\D/g, "")).toBe("1600");
   expect(document.activeElement).toHaveTextContent("therealsad-");
 });
 
