@@ -121,6 +121,35 @@ class LeaderboardUpdaterTests(unittest.TestCase):
             )
             self.assertEqual(written, {**api_payload, "fetched_at": 1_900_000_000})
 
+    def test_update_once_writes_canonical_sitemap_with_verifiable_lastmod(self):
+        payloads = {
+            "europe": {
+                "time_posted": 1_700_000_000,
+                "leaderboard": [{"rank": 1, "name": "Europe Player"}],
+            },
+            "americas": {
+                "time_posted": 1_800_000_000,
+                "leaderboard": [{"rank": 1, "name": "Americas Player"}],
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory)
+
+            with mock.patch.object(
+                updater,
+                "fetch_region",
+                side_effect=lambda region, attempts, timeout: payloads[region],
+            ), mock.patch.object(updater.time, "time", side_effect=[1_900_000_000, 1_900_003_600]):
+                updater.update_once(output_dir, ("europe", "americas"))
+
+            sitemap = (output_dir / "sitemap.xml").read_text(encoding="utf-8")
+            self.assertIn("<loc>https://dota2leaderboards.com/</loc>", sitemap)
+            self.assertIn("<lastmod>2030-03-17T18:46:40Z</lastmod>", sitemap)
+            self.assertNotIn("?region=", sitemap)
+            self.assertNotIn("<changefreq>", sitemap)
+            self.assertNotIn("<priority>", sitemap)
+
     def test_player_key_generation_is_deterministic(self):
         player = {"rank": 1, "name": "  Player   One ", "team_id": 42, "country": "FI"}
 
