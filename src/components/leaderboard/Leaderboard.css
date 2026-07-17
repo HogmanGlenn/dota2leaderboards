@@ -47,18 +47,10 @@
 .leaderboard-row {
   display: grid;
   min-height: 0;
-  grid-template-columns: 72px minmax(220px, 1fr) minmax(140px, 0.7fr) minmax(220px, 0.9fr);
-}
-
-.leaderboard-card--relative .leaderboard-row {
-  grid-template-columns: 104px minmax(200px, 1fr) minmax(130px, 0.65fr) minmax(210px, 0.9fr);
-}
-
-.leaderboard-card--history .leaderboard-row {
   grid-template-columns: 92px minmax(200px, 1fr) minmax(130px, 0.65fr) minmax(210px, 0.9fr);
 }
 
-.leaderboard-card--relative.leaderboard-card--history .leaderboard-row {
+.leaderboard-card--relative .leaderboard-row {
   grid-template-columns: 112px minmax(190px, 1fr) minmax(124px, 0.62fr) minmax(200px, 0.86fr);
 }
 
@@ -91,6 +83,12 @@
   background: #262626;
 }
 
+.leaderboard-row--find-target {
+  background: #263230;
+  outline: 2px solid #448e85;
+  outline-offset: -2px;
+}
+
 .leaderboard-row--player:focus-visible {
   background: #262626;
   outline: 2px solid #448e85;
@@ -112,18 +110,10 @@
 
 .rank-column {
   position: relative;
-  width: 72px;
-}
-
-.leaderboard-card--relative .rank-column {
-  width: 104px;
-}
-
-.leaderboard-card--history .rank-column {
   width: 92px;
 }
 
-.leaderboard-card--relative.leaderboard-card--history .rank-column {
+.leaderboard-card--relative .rank-column {
   width: 112px;
 }
 
@@ -144,10 +134,12 @@
 }
 
 .rank-delta {
+  min-width: 2.2em;
   color: #8f8b85;
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  text-align: left;
 }
 
 .rank-delta--up {
@@ -247,10 +239,11 @@
 }
 
 .page-indicator {
-  min-width: 48px;
+  min-width: 96px;
   color: #b4b0aa;
   cursor: default;
   font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
   text-align: center;
   user-select: none;
 }
@@ -289,6 +282,30 @@
   white-space: nowrap;
 }
 
+.leaderboard-find-index {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  color: transparent;
+  font-size: 1px;
+  line-height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  white-space: pre;
+}
+
+.leaderboard-find-index__row {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  height: 1px;
+}
+
 .state-card {
   display: flex;
   min-height: 240px;
@@ -314,26 +331,17 @@
 }
 
 @media (max-width: 640px) {
-  .leaderboard-row,
-  .leaderboard-card--relative .leaderboard-row {
-    grid-template-columns: 40px minmax(0, 1fr) 58px 62px;
+  .leaderboard-row {
+    grid-template-columns: 58px minmax(0, 1fr) 56px 60px;
     grid-template-rows: 1fr;
   }
 
   .leaderboard-card--relative .leaderboard-row {
-    grid-template-columns: 66px minmax(0, 1fr) 52px 60px;
-  }
-
-  .leaderboard-card--history .leaderboard-row {
-    grid-template-columns: 58px minmax(0, 1fr) 56px 60px;
-  }
-
-  .leaderboard-card--relative.leaderboard-card--history .leaderboard-row {
     grid-template-columns: 72px minmax(0, 1fr) 52px 60px;
   }
 
   .rank-column {
-    width: 40px;
+    width: 58px;
     padding: 0 6px;
     align-items: flex-start;
     flex-direction: column;
@@ -346,14 +354,6 @@
   }
 
   .leaderboard-card--relative .rank-column {
-    width: 66px;
-  }
-
-  .leaderboard-card--history .rank-column {
-    width: 58px;
-  }
-
-  .leaderboard-card--relative.leaderboard-card--history .rank-column {
     width: 72px;
   }
 
@@ -378,14 +378,17 @@
   }
 
   .country-column {
-    padding: 0 3px;
-    justify-content: flex-start;
+    padding: 0 6px;
+    justify-content: flex-end;
     grid-column: 4;
     grid-row: 1;
   }
 
+  .leaderboard-row--player .country-column {
+    justify-content: flex-start;
+  }
+
   .leaderboard-row--head .country-column {
-    justify-content: center;
     font-size: 0.66rem;
     letter-spacing: 0.04em;
   }

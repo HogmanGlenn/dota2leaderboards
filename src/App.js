@@ -10,7 +10,7 @@ import Navigation from "./components/navigation/Navigation";
 import { getLeaderboardData } from "./api/LeaderboardsApi";
 import { getLeaderboardHistory } from "./api/LeaderboardHistoryApi";
 import { trackPageView } from "./analytics";
-import { REGIONS } from "./constants";
+import { DEFAULT_PAGE_SIZE, REGIONS } from "./constants";
 import { getCountryName, getCountrySlug } from "./utils/countries";
 import {
   createHistoryIndex,
@@ -22,7 +22,6 @@ import {
   parseSharedPins,
   pinnedPlayerId,
   readPinnedPlayers,
-  serializeSharedPins,
   togglePinnedPlayer,
   writePinnedPlayers,
 } from "./utils/pins";
@@ -33,9 +32,10 @@ import {
   upsertSavedSelection,
   writeSavedSelections,
 } from "./utils/savedSelections";
+import { getPlayerFindKey } from "./utils/playerFindText";
+import { parseCompactShareRoute, serializeCompactShareRoute } from "./utils/shareRoute";
 import "./App.css";
 
-const DEFAULT_PAGE_SIZE = 25;
 const HOME_ROUTE = {
   region: "europe",
   country: "all",
@@ -45,7 +45,7 @@ const HOME_ROUTE = {
   sharedPinsParam: "",
   demoHistory: false,
 };
-const ROUTE_PARAMS = new Set(["region", "country", "limit", "p", "h", "pins", "demo"]);
+const ROUTE_PARAMS = new Set(["region", "country", "limit", "p", "h", "pins", "demo", "s"]);
 
 function canUseHistoryDemo() {
   const hostname = window.location.hostname.toLowerCase();
@@ -94,6 +94,7 @@ function readRoute() {
   const requestedHistoryWindow = params.get("h");
   const requestedSharedPins = params.get("pins");
   const requestedDemo = params.get("demo");
+  const requestedCompactShare = params.get("s");
   const requestedPageSize = Number(requestedLimit);
   const hasUnknownParam = Array.from(params.keys()).some((param) => !ROUTE_PARAMS.has(param));
   const hasDuplicateParam = Array.from(ROUTE_PARAMS).some((param) => params.getAll(param).length > 1);
@@ -108,6 +109,11 @@ function readRoute() {
     && !/^[a-z0-9_,.:~-]{0,2500}$/i.test(requestedSharedPins);
   const hasInvalidDemo = requestedDemo !== null
     && (requestedDemo !== "history" || !canUseHistoryDemo());
+  const hasMixedCompactShare = requestedCompactShare !== null
+    && Array.from(params.keys()).some((param) => param !== "s");
+  const compactShareRoute = requestedCompactShare === null
+    ? null
+    : parseCompactShareRoute(requestedCompactShare);
 
   if (
     window.location.pathname !== "/"
@@ -120,9 +126,15 @@ function readRoute() {
     || hasInvalidHistoryWindow
     || hasInvalidSharedPins
     || hasInvalidDemo
+    || hasMixedCompactShare
+    || (requestedCompactShare !== null && !compactShareRoute)
   ) {
     window.history.replaceState({}, "", "/");
     return { ...HOME_ROUTE };
+  }
+
+  if (compactShareRoute) {
+    return { ...compactShareRoute, demoHistory: false };
   }
 
   return {
@@ -142,13 +154,14 @@ function Dashboard() {
   const [leaderboard, setLeaderboard] = React.useState({ region: null, players: [], updatedAt: null });
   const [history, setHistory] = React.useState({ region: null, data: null });
   const [historyError, setHistoryError] = React.useState("");
-  const [isHistoryLoading, setIsHistoryLoading] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [pinnedPlayers, setPinnedPlayers] = React.useState(readPinnedPlayers);
   const [savedSelections, setSavedSelections] = React.useState(readSavedSelections);
   const [selectionName, setSelectionName] = React.useState("");
   const [saveStatus, setSaveStatus] = React.useState("");
   const [shareStatus, setShareStatus] = React.useState("");
+  const [findJump, setFindJump] = React.useState(null);
+  const [pageResetVersion, setPageResetVersion] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState("");
   const [requestVersion, setRequestVersion] = React.useState(0);
@@ -205,104 +218,46 @@ function Dashboard() {
 
   React.useEffect(() => {
     let cancelled = false;
-    const cached = cache.current.get(region);
-
     setError("");
-    if (cached) {
-      setLeaderboard(cached);
-      setIsLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
+    setHistoryError("");
+    setShareStatus("");
     setIsLoading(true);
-    loadRegion(region)
-      .then((data) => {
+
+    const leaderboardRequest = loadRegion(region);
+    const historyRequest = route.historyWindow === "off"
+      ? Promise.resolve({ data: null, error: "" })
+      : route.demoHistory
+        ? leaderboardRequest.then((data) => ({
+            data: createSimulatedHistory(data.players, data.updatedAt),
+            error: "",
+          }))
+        : loadHistory(region)
+          .then((data) => ({ data, error: "" }))
+          .catch((fetchError) => ({
+            data: null,
+            error: fetchError.message || "History could not be loaded.",
+          }));
+
+    Promise.all([leaderboardRequest, historyRequest])
+      .then(([data, historyResult]) => {
         if (cancelled) return;
         setLeaderboard(data);
+        setHistory({ region, data: historyResult.data });
+        setHistoryError(historyResult.error);
+        setIsLoading(false);
       })
       .catch((fetchError) => {
         if (cancelled) return;
         setError(fetchError.message || "The leaderboard could not be loaded.");
         setLeaderboard({ region, players: [], updatedAt: null });
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        setHistory({ region, data: null });
+        setIsLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [loadRegion, region, requestVersion]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    setShareStatus("");
-    const isCurrentLeaderboard = leaderboard.region === region;
-
-    if (route.historyWindow === "off") {
-      setHistory({ region: null, data: null });
-      setHistoryError("");
-      setIsHistoryLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    if (!isCurrentLeaderboard) {
-      setHistoryError("");
-      setIsHistoryLoading(true);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    if (route.demoHistory) {
-      setHistory({
-        region,
-        data: createSimulatedHistory(leaderboard.players, leaderboard.updatedAt),
-      });
-      setHistoryError("");
-      setIsHistoryLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const cached = historyCache.current.get(region);
-    setHistoryError("");
-    if (cached) {
-      setHistory({ region, data: cached });
-      setIsHistoryLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setIsHistoryLoading(true);
-    setHistory((currentHistory) => (
-      currentHistory.region === region
-        ? currentHistory
-        : { region: null, data: null }
-    ));
-    loadHistory(region)
-      .then((data) => {
-        if (!cancelled) setHistory({ region, data });
-      })
-      .catch((fetchError) => {
-        if (cancelled) return;
-        setHistory({ region: null, data: null });
-        setHistoryError(fetchError.message || "History could not be loaded.");
-      })
-      .finally(() => {
-        if (!cancelled) setIsHistoryLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [leaderboard.players, leaderboard.region, leaderboard.updatedAt, loadHistory, region, route.demoHistory, route.historyWindow]);
+  }, [loadHistory, loadRegion, region, requestVersion, route.demoHistory, route.historyWindow]);
 
   React.useEffect(() => {
     Object.keys(REGIONS).forEach((targetRegion) => {
@@ -316,7 +271,6 @@ function Dashboard() {
     return () => window.clearTimeout(timeout);
   }, [saveStatus]);
 
-  const isLeaderboardCurrent = leaderboard.region === region;
   const currentPlayers = leaderboard.players;
   const currentUpdatedAt = leaderboard.updatedAt;
   const currentDataRegion = leaderboard.region || region;
@@ -358,16 +312,16 @@ function Dashboard() {
     [localPinnedIds, sharedPinnedIds]
   );
 
+  const pinnedFilterIds = route.pinnedOnly ? activePinnedIds : null;
   const filteredPlayers = React.useMemo(() => {
     const needle = search.trim().toLocaleLowerCase();
     return currentPlayers.filter((player) => {
       const isCountryMatch = !countryFilter || player.countrySlug === countryFilter;
       const isSearchMatch = !needle || player.searchText.includes(needle);
-      const isPinnedMatch = !route.pinnedOnly || activePinnedIds.has(pinnedPlayerId(currentDataRegion, player.playerKey));
+      const isPinnedMatch = !pinnedFilterIds || pinnedFilterIds.has(pinnedPlayerId(currentDataRegion, player.playerKey));
       return isCountryMatch && isSearchMatch && isPinnedMatch;
     });
-  }, [activePinnedIds, countryFilter, currentDataRegion, currentPlayers, route.pinnedOnly, search]);
-
+  }, [countryFilter, currentDataRegion, currentPlayers, pinnedFilterIds, search]);
   const historyIndex = React.useMemo(() => createHistoryIndex(currentHistory), [currentHistory]);
   const rankDeltas = React.useMemo(() => {
     if (!canShowRankDelta) return new Map();
@@ -441,7 +395,13 @@ function Dashboard() {
   };
   const resetHome = () => {
     setSearch("");
-    updateRoute({ ...HOME_ROUTE });
+    setFindJump(null);
+    setPageResetVersion((version) => version + 1);
+    updateRoute({
+      ...HOME_ROUTE,
+      historyWindow: route.historyWindow,
+      demoHistory: route.demoHistory,
+    });
   };
   const clearPinned = () => {
     setPinnedPlayers([]);
@@ -500,17 +460,12 @@ function Dashboard() {
     [activePinnedIds, currentDataRegion]
   );
   const shareView = async () => {
-    const sharePins = serializeSharedPins(currentSharePins);
-    const params = new URLSearchParams();
-    if (route.region !== "europe") params.set("region", route.region);
-    if (route.country !== "all") params.set("country", route.country);
-    if (route.pageSize !== DEFAULT_PAGE_SIZE) params.set("limit", String(route.pageSize));
-    if (route.pinnedOnly) params.set("p", "1");
-    if (route.historyWindow !== "off") params.set("h", route.historyWindow);
-    if (sharePins) params.set("pins", sharePins);
-
-    const query = params.toString();
-    const url = `${window.location.origin}/${query ? `?${query}` : ""}`;
+    const compactShare = serializeCompactShareRoute(
+      route,
+      currentSharePins,
+      selectedCountry?.countryCode
+    );
+    const url = `${window.location.origin}/${compactShare ? `?s=${compactShare}` : ""}`;
     try {
       await navigator.clipboard.writeText(url);
       setShareStatus("Copied");
@@ -524,12 +479,29 @@ function Dashboard() {
     inFlight.current.delete(region);
     setRequestVersion((version) => version + 1);
   };
+  const closeNativeFind = React.useCallback(() => setFindJump(null), []);
+  const handleNativeFindMatch = React.useCallback(({ findKey }) => {
+    if (!findKey || currentPlayers.length === 0) return;
+
+    const isInCurrentView = filteredPlayers.some((player) => getPlayerFindKey(player) === findKey);
+    if (!isInCurrentView) {
+      setSearch("");
+      updateRoute({ country: "all", pinnedOnly: false }, true);
+    }
+
+    setFindJump({ findKey });
+  }, [currentPlayers.length, filteredPlayers, updateRoute]);
 
   return (
     <div className="app-shell">
       <main className="content" id="main-content">
         <header className="site-header">
-          <button className="site-title" type="button" onClick={resetHome}>
+          <button
+            className="site-title"
+            type="button"
+            data-preserve-native-find="true"
+            onClick={resetHome}
+          >
             Dota 2 Leaderboards
           </button>
         </header>
@@ -544,7 +516,7 @@ function Dashboard() {
           pageSize={pageSize}
           pageSizeOptions={pageSizeOptions}
           onPageSizeChange={changePageSize}
-          isLoading={isLoading}
+          isLoading={isInitialLoading}
           countrySlug={navigationCountrySlug}
           pinnedOnly={route.pinnedOnly}
           onPinnedOnlyChange={changePinnedOnly}
@@ -556,12 +528,10 @@ function Dashboard() {
           historyStatus={
             route.historyWindow === "off"
               ? ""
-              : isHistoryLoading || !isLeaderboardCurrent
-                ? "Loading history"
-                : historyError
-                  ? "History unavailable"
-                  : route.demoHistory
-                    ? "Simulated history"
+              : historyError
+                ? "History unavailable"
+                : route.demoHistory
+                  ? "Simulated history"
                   : ""
           }
           onShare={shareView}
@@ -578,6 +548,11 @@ function Dashboard() {
         />
         <Leaderboard
           players={filteredPlayers}
+          findIndexPlayers={currentPlayers}
+          findJump={findJump}
+          onNativeFindClose={closeNativeFind}
+          onNativeFindMatch={handleNativeFindMatch}
+          pageResetVersion={pageResetVersion}
           rowsPerPage={pageSize}
           effectiveRowsPerPage={
             pageSize === 5000 && filteredPlayers.length > 5000
