@@ -15,9 +15,9 @@
       content="Dota 2 leaderboard, Dota 2 rankings, Dota 2 players, Dota 2 MMR, Dota 2 ranked"
     />
     <link rel="canonical" href="https://dota2leaderboards.com/" />
-    <link rel="icon" type="image/png" sizes="192x192" href="%PUBLIC_URL%/dota-logo-192.png" />
-    <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="192x192" href="%PUBLIC_URL%/dota-logo-192.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/dota-logo-192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <link rel="preload" href="%PUBLIC_URL%/data/europe/v0001.json" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="%PUBLIC_URL%/data/americas/v0001.json" as="fetch" crossorigin="anonymous" />
@@ -48,12 +48,25 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "Dota 2 Leaderboards",
-        "url": "https://dota2leaderboards.com/",
-        "applicationCategory": "GameApplication",
-        "operatingSystem": "Any",
-        "description": "Browse current Dota 2 leaderboards by region, country, player name, and team."
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://dota2leaderboards.com/#website",
+            "name": "Dota 2 Leaderboards",
+            "url": "https://dota2leaderboards.com/"
+          },
+          {
+            "@type": "WebApplication",
+            "name": "Dota 2 Leaderboards",
+            "url": "https://dota2leaderboards.com/",
+            "applicationCategory": "GameApplication",
+            "operatingSystem": "Any",
+            "description": "Browse current Dota 2 leaderboards by region, country, player name, and team.",
+            "isPartOf": {
+              "@id": "https://dota2leaderboards.com/#website"
+            }
+          }
+        ]
       }
     </script>
     <title>Dota 2 Leaderboards</title>
