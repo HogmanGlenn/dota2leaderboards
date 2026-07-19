@@ -1,0 +1,130 @@
+name: Clean up automation history
+
+on:
+  schedule:
+    - cron: "37 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+  deployments: write
+
+concurrency:
+  group: automation-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete old workflow runs and inactive deployments
+        uses: actions/github-script@v9
+        with:
+          retries: 3
+          script: |
+            const retentionDays = 7;
+            const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+            const { owner, repo } = context.repo;
+            const automatedWorkflows = new Set([
+              "Refresh leaderboard data",
+              "Clean up automation history",
+            ]);
+
+            const runs = await github.paginate(
+              github.rest.actions.listWorkflowRunsForRepo,
+              { owner, repo, status: "completed", per_page: 100 },
+            );
+
+            let deletedRuns = 0;
+            let failedRuns = 0;
+            for (const run of runs) {
+              if (
+                run.id === context.runId ||
+                !automatedWorkflows.has(run.name) ||
+                Date.parse(run.created_at) >= cutoff
+              ) {
+                continue;
+              }
+
+              try {
+                await github.rest.actions.deleteWorkflowRun({
+                  owner,
+                  repo,
+                  run_id: run.id,
+                });
+                deletedRuns += 1;
+              } catch (error) {
+                failedRuns += 1;
+                core.warning(`Could not delete workflow run ${run.id}: ${error.message}`);
+              }
+            }
+
+            const deployments = await github.paginate(
+              github.rest.repos.listDeployments,
+              { owner, repo, environment: "github-pages", per_page: 100 },
+            );
+
+            let deletedDeployments = 0;
+            let skippedDeployments = 0;
+            let failedDeployments = 0;
+            for (const deployment of deployments) {
+              if (Date.parse(deployment.created_at) >= cutoff) {
+                continue;
+              }
+
+              try {
+                const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
+                  owner,
+                  repo,
+                  deployment_id: deployment.id,
+                  per_page: 100,
+                });
+                const latestStatus = statuses.reduce((latest, status) =>
+                  !latest || Date.parse(status.created_at) > Date.parse(latest.created_at)
+                    ? status
+                    : latest,
+                null);
+
+                if (latestStatus?.state !== "inactive") {
+                  skippedDeployments += 1;
+                  continue;
+                }
+
+                await github.rest.repos.deleteDeployment({
+                  owner,
+                  repo,
+                  deployment_id: deployment.id,
+                });
+                deletedDeployments += 1;
+              } catch (error) {
+                failedDeployments += 1;
+                core.warning(`Could not clean deployment ${deployment.id}: ${error.message}`);
+              }
+            }
+
+            await core.summary
+              .addHeading("Automation cleanup")
+              .addTable([
+                [
+                  { data: "Record type", header: true },
+                  { data: "Deleted", header: true },
+                  { data: "Failed", header: true },
+                ],
+                ["Completed automation workflow runs", String(deletedRuns), String(failedRuns)],
+                [
+                  "Inactive GitHub Pages deployments",
+                  String(deletedDeployments),
+                  String(failedDeployments),
+                ],
+              ])
+              .addRaw(
+                `Kept the last ${retentionDays} days. ` +
+                  `${skippedDeployments} old deployment(s) were still active and left untouched.`,
+              )
+              .write();
+
+            if (failedRuns + failedDeployments > 0) {
+              core.setFailed("Some old automation records could not be cleaned up.");
+            }

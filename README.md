@@ -63,5 +63,7 @@ python -m unittest discover -s scripts -p "test_*.py"
 
 - `Refresh leaderboard data` runs at minute 14 of every hour and can also be started manually. It tests the updater, downloads and validates every region, commits only changed files under `public/data`, and triggers deployment when data changed.
 - `Build and deploy GitHub Pages` runs for changes to `master`, manual starts, and successful data refreshes. It installs from `package-lock.json`, runs the frontend tests, creates an optimized build, and deploys it with GitHub Pages.
+- Consecutive automated data refreshes are folded into one rolling `Update leaderboard data` commit. A human commit starts a new rolling data commit, so human-authored history is never rewritten. If repository rules prohibit force-pushes, the refresh safely falls back to a normal commit.
+- `Clean up automation history` runs weekly and can also be started manually. It keeps seven days of completed refresh/cleanup workflow runs and inactive GitHub Pages deployment records, leaving human-code workflow runs and active deployments untouched.
 
 The workflows use the repository-provided `GITHUB_TOKEN`. Google Analytics is optional and is enabled only when the `GA_MEASUREMENT_ID` repository variable is configured. Local builds can use `REACT_APP_GA_MEASUREMENT_ID`.
