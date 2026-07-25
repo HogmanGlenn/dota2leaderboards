@@ -42,14 +42,14 @@ jobs:
         id: commit
         shell: bash
         run: |
-          if git diff --quiet -- public/data; then
-            echo "Leaderboard data is already current."
+          if git diff --quiet -- public/data public/sitemap.xml; then
+            echo "Leaderboard data and sitemap are already current."
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/data
+          git add public/data public/sitemap.xml
 
           previous_sha="$(git rev-parse HEAD)"
           previous_email="$(git log -1 --format=%ce)"
