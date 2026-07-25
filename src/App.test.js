@@ -58,6 +58,7 @@ test("loads and renders leaderboard data", async () => {
   expect(await screen.findByText("Top Carry")).toBeInTheDocument();
   expect(screen.getByText("GG")).toBeInTheDocument();
   expect(screen.getByText(/last updated/i)).toBeInTheDocument();
+  expect(document.title).toBe("Dota 2 Leaderboard | Regional Rankings");
   expect(fetch).toHaveBeenCalledWith(
     expect.stringContaining("/data/europe/v0001.json"),
     expect.objectContaining({ signal: undefined })
@@ -125,6 +126,23 @@ test("returns an unknown country to the homepage after data loads", async () => 
   expect(window.location.pathname).toBe("/");
 });
 
+test("loads a country page and a 7d window from its permanent URL", async () => {
+  window.history.replaceState({}, "", "/europe/finland/?h=7d");
+
+  render(<App />);
+
+  expect(screen.getByRole("link", { name: "Americas" })).toHaveAttribute(
+    "href",
+    "/americas/finland/"
+  );
+  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
+  expect(screen.queryByText("Mid Player")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Filter by country")).toHaveValue("Finland");
+  expect(window.location.pathname).toBe("/europe/finland/");
+  expect(window.location.search).toBe("?h=7d");
+  expect(document.title).toBe("Dota 2 Leaderboard | Finland, Europe");
+});
+
 test("filters players by name or team", async () => {
   render(<App />);
   await screen.findByText("Top Carry");
@@ -158,13 +176,14 @@ test("clears typed country search text before a country is selected", async () =
   expect(screen.getByLabelText("Filter by country")).toHaveValue("");
 });
 
-test("stores the selected region in the query string", async () => {
+test("stores the selected region in a crawlable path", async () => {
   render(<App />);
   await screen.findByText("Top Carry");
 
-  await userEvent.click(screen.getByRole("button", { name: "Americas" }));
+  await userEvent.click(screen.getByRole("link", { name: "Americas" }));
 
-  await waitFor(() => expect(window.location.search).toBe("?region=americas"));
+  await waitFor(() => expect(window.location.pathname).toBe("/americas/"));
+  expect(window.location.search).toBe("");
   await waitFor(() =>
     expect(screen.getByRole("region", { name: "Player rankings" })).toHaveAttribute("aria-busy", "false")
   );
@@ -175,15 +194,15 @@ test("stores the selected region in the query string", async () => {
   );
 });
 
-test("keeps the browser title stable when region changes", async () => {
+test("updates page metadata when region changes", async () => {
   document.title = "Dota 2 Leaderboards";
   render(<App />);
   await screen.findByText("Top Carry");
 
-  await userEvent.click(screen.getByRole("button", { name: "Americas" }));
+  await userEvent.click(screen.getByRole("link", { name: "Americas" }));
 
-  await waitFor(() => expect(window.location.search).toBe("?region=americas"));
-  expect(document.title).toBe("Dota 2 Leaderboards");
+  await waitFor(() => expect(window.location.pathname).toBe("/americas/"));
+  expect(document.title).toBe("Dota 2 Leaderboard | Americas");
 });
 
 test("keeps country, search, and visible row count when changing region", async () => {
@@ -198,9 +217,10 @@ test("keeps country, search, and visible row count when changing region", async 
   await screen.findByText("Player 25");
 
   await userEvent.type(screen.getByLabelText("Player or team"), "Player 2");
-  await userEvent.click(screen.getByRole("button", { name: "Americas" }));
+  await userEvent.click(screen.getByRole("link", { name: "Americas" }));
 
-  await waitFor(() => expect(window.location.search).toBe("?region=americas&country=finland&limit=50"));
+  await waitFor(() => expect(window.location.pathname).toBe("/americas/finland/"));
+  expect(window.location.search).toBe("?limit=50");
   expect(screen.getByLabelText("Player or team")).toHaveValue("Player 2");
   expect(screen.getByLabelText("Visible rows")).toHaveTextContent("50");
 });
@@ -218,9 +238,10 @@ test("keeps existing country rows visible while a new region loads", async () =>
   render(<App />);
   await screen.findByText("Player 1");
 
-  await userEvent.click(screen.getByRole("button", { name: "Americas" }));
+  await userEvent.click(screen.getByRole("link", { name: "Americas" }));
 
-  await waitFor(() => expect(window.location.search).toBe("?region=americas&country=finland"));
+  await waitFor(() => expect(window.location.pathname).toBe("/americas/finland/"));
+  expect(window.location.search).toBe("");
   expect(screen.getByText("Player 1")).toBeInTheDocument();
   expect(document.querySelector(".MuiSkeleton-root")).not.toBeInTheDocument();
 });
@@ -230,7 +251,7 @@ test("clicking the title resets the route", async () => {
   render(<App />);
   await screen.findByText("Top Carry");
 
-  await userEvent.click(screen.getByRole("button", { name: "Dota 2 Leaderboards" }));
+  await userEvent.click(screen.getByRole("link", { name: "Dota 2 Leaderboards" }));
 
   await waitFor(() => expect(window.location.search).toBe(""));
   await waitFor(() =>
@@ -245,7 +266,7 @@ test("rejects compact share links mixed with verbose route parameters", async ()
 
   expect(await screen.findByText("Top Carry")).toBeInTheDocument();
   expect(window.location.search).toBe("");
-  expect(screen.getByRole("button", { name: "Europe" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("link", { name: "Europe" })).toHaveAttribute("aria-current", "page");
 });
 
 test("clicking the title keeps rank change visibility", async () => {
@@ -275,7 +296,7 @@ test("clicking the title keeps rank change visibility", async () => {
   render(<App />);
   await screen.findByText("Top Carry");
 
-  await userEvent.click(screen.getByRole("button", { name: "Dota 2 Leaderboards" }));
+  await userEvent.click(screen.getByRole("link", { name: "Dota 2 Leaderboards" }));
 
   await waitFor(() => expect(window.location.search).toBe("?h=8h"));
   expect(screen.getByRole("region", { name: "Player rankings" })).toHaveClass("leaderboard-card--history");
@@ -295,7 +316,7 @@ test("clicking the title returns the leaderboard to page one", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Next page" }));
   expect(getPageIndicator(2)).toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole("button", { name: "Dota 2 Leaderboards" }));
+  await userEvent.click(screen.getByRole("link", { name: "Dota 2 Leaderboards" }));
 
   await waitFor(() => expect(getPageIndicator(1)).toBeInTheDocument());
   expect(screen.getByText("Player 1")).toBeInTheDocument();
@@ -750,7 +771,7 @@ test("clicking the title clears a stale native find jump", async () => {
   expect(screen.getByText("Player 60")).toBeInTheDocument();
 
   window.getSelection().removeAllRanges();
-  await userEvent.click(screen.getByRole("button", { name: "Dota 2 Leaderboards" }));
+  await userEvent.click(screen.getByRole("link", { name: "Dota 2 Leaderboards" }));
 
   await waitFor(() => expect(getPageIndicator(1)).toBeInTheDocument());
   expect(screen.getByText("Player 1")).toBeInTheDocument();
@@ -1220,7 +1241,7 @@ test("keeps the previous region intact until the next region and history are rea
   const initialRows = Array.from(document.querySelectorAll("[data-player-row='true']"));
   const initialBodyHeight = screen.getByTestId("leaderboard-body").style.height;
 
-  await userEvent.click(screen.getByRole("button", { name: "Americas" }));
+  await userEvent.click(screen.getByRole("link", { name: "Americas" }));
 
   expect(screen.getByText("+4")).toBeInTheDocument();
   expect(screen.getByText("Top Carry")).toBeInTheDocument();
@@ -1255,18 +1276,20 @@ test("keeps the previous region intact until the next region and history are rea
   expect(screen.queryByText("+4")).not.toBeInTheDocument();
 });
 
-test("share copies a compact personalized link", async () => {
+test("share copies a readable permanent link with the 7d window", async () => {
   render(<App />);
   await screen.findByText("Top Carry");
 
   await userEvent.click(screen.getByText("Top Carry"));
   await userEvent.click(screen.getByRole("button", { name: "More options" }));
+  await userEvent.click(screen.getByLabelText("Show rank change"));
+  await userEvent.click(screen.getByRole("option", { name: "7 days" }));
   await act(async () => {
     await userEvent.click(screen.getByRole("button", { name: /copy shareable link/i }));
   });
 
   await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-    expect.stringMatching(/\/?s=1e\.{4}e[a-z0-9]+$/)
+    expect.stringMatching(/^http:\/\/localhost\/europe\/\?h=7d&pins=europe\.p[a-z0-9]+$/)
   ));
   await waitFor(() => expect(screen.getByRole("button", { name: /copy shareable link/i })).toHaveAttribute("title", "Copied"));
 });

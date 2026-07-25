@@ -9,7 +9,8 @@
 - Use the browser's Ctrl+F search across the entire selected region, including players outside the current page.
 - Pin players, filter to pinned players, and save named views in local browser storage.
 - Compare rank changes over 8 hours, 24 hours, 7 days, or 30 days.
-- Copy compact share links that include the selected region, country, row count, rank-change window, and shared pins. Existing verbose query links remain supported.
+- Copy permanent links that include the selected region, country, row count, rank-change window, and shared pins. Existing compact and verbose query links remain supported.
+- Open crawlable region and country URLs with page-specific titles, descriptions, canonical links, and structured leaderboard data.
 
 ## Local development
 
@@ -27,13 +28,13 @@ npm run test:ci
 npm run build
 ```
 
-The production output is written to `build/`.
+The production output is written to `build/`. The post-build step creates static HTML entry points for each current region and country leaderboard and writes their canonical URLs to the deployed sitemap.
 
 ## Leaderboard data
 
 Current snapshots are stored in `public/data/<region>/v0001.json`. Rank history is stored separately in `public/data/<region>/history.v0001.json` so refreshing a leaderboard cannot discard previously collected history.
 
-The updater uses Python's standard library and validates every non-empty response before replacing a region. Writes are atomic. If a request fails or returns invalid data, that region's existing snapshot and history remain unchanged. Rank snapshots are recorded at most once every eight hours and retained for 30 days.
+The updater validates every non-empty response before replacing a region. Writes are atomic. If a request fails or returns invalid data, that region's existing snapshot and history remain unchanged. Rank snapshots are recorded at most once every eight hours and retained for 30 days. Node.js generates the sitemap from the validated regional data so country names and canonical paths use the same Unicode-safe normalization as the site build.
 
 Use Python 3.12, which matches the automation workflow:
 

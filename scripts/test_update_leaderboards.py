@@ -125,11 +125,15 @@ class LeaderboardUpdaterTests(unittest.TestCase):
         payloads = {
             "europe": {
                 "time_posted": 1_700_000_000,
-                "leaderboard": [{"rank": 1, "name": "Europe Player"}],
+                "leaderboard": [
+                    {"rank": 1, "name": "Europe Player", "country": "fi"}
+                ],
             },
             "americas": {
                 "time_posted": 1_800_000_000,
-                "leaderboard": [{"rank": 1, "name": "Americas Player"}],
+                "leaderboard": [
+                    {"rank": 1, "name": "Americas Player", "country": "ci"}
+                ],
             },
         }
 
@@ -146,6 +150,14 @@ class LeaderboardUpdaterTests(unittest.TestCase):
             sitemap = (output_dir / "sitemap.xml").read_text(encoding="utf-8")
             self.assertIn("<loc>https://dota2leaderboards.com/</loc>", sitemap)
             self.assertIn("<lastmod>2030-03-17T18:46:40Z</lastmod>", sitemap)
+            self.assertIn(
+                "<loc>https://dota2leaderboards.com/europe/finland/</loc>",
+                sitemap,
+            )
+            self.assertIn(
+                "<loc>https://dota2leaderboards.com/americas/cote-d-ivoire/</loc>",
+                sitemap,
+            )
             self.assertNotIn("?region=", sitemap)
             self.assertNotIn("<changefreq>", sitemap)
             self.assertNotIn("<priority>", sitemap)

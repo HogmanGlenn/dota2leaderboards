@@ -22,6 +22,7 @@ import {
   parseSharedPins,
   pinnedPlayerId,
   readPinnedPlayers,
+  serializeSharedPins,
   togglePinnedPlayer,
   writePinnedPlayers,
 } from "./utils/pins";
@@ -33,7 +34,9 @@ import {
   writeSavedSelections,
 } from "./utils/savedSelections";
 import { getPlayerFindKey } from "./utils/playerFindText";
-import { parseCompactShareRoute, serializeCompactShareRoute } from "./utils/shareRoute";
+import { createLeaderboardUrl, getLeaderboardPath, parseLeaderboardPath } from "./utils/leaderboardRoute";
+import { applySeoMetadata } from "./utils/seoMetadata";
+import { parseCompactShareRoute } from "./utils/shareRoute";
 import "./App.css";
 
 const HOME_ROUTE = {
@@ -87,6 +90,7 @@ const theme = createTheme({
 
 function readRoute() {
   const params = new URLSearchParams(window.location.search);
+  const pathRoute = parseLeaderboardPath(window.location.pathname);
   const requestedRegion = params.get("region");
   const requestedCountry = params.get("country");
   const requestedLimit = params.get("limit");
@@ -111,12 +115,17 @@ function readRoute() {
     && (requestedDemo !== "history" || !canUseHistoryDemo());
   const hasMixedCompactShare = requestedCompactShare !== null
     && Array.from(params.keys()).some((param) => param !== "s");
+  const hasPathRouteConflict = pathRoute && !pathRoute.isHomepage && (
+    requestedRegion !== null
+    || requestedCountry !== null
+    || requestedCompactShare !== null
+  );
   const compactShareRoute = requestedCompactShare === null
     ? null
     : parseCompactShareRoute(requestedCompactShare);
 
   if (
-    window.location.pathname !== "/"
+    !pathRoute
     || hasUnknownParam
     || hasDuplicateParam
     || hasInvalidRegion
@@ -127,6 +136,7 @@ function readRoute() {
     || hasInvalidSharedPins
     || hasInvalidDemo
     || hasMixedCompactShare
+    || hasPathRouteConflict
     || (requestedCompactShare !== null && !compactShareRoute)
   ) {
     window.history.replaceState({}, "", "/");
@@ -138,8 +148,12 @@ function readRoute() {
   }
 
   return {
-    region: requestedRegion || HOME_ROUTE.region,
-    country: requestedCountry || HOME_ROUTE.country,
+    region: pathRoute.isHomepage
+      ? requestedRegion || HOME_ROUTE.region
+      : pathRoute.region,
+    country: pathRoute.isHomepage
+      ? requestedCountry || HOME_ROUTE.country
+      : pathRoute.country,
     pageSize: requestedLimit === null ? HOME_ROUTE.pageSize : requestedPageSize,
     pinnedOnly: requestedPinnedOnly === "1",
     historyWindow: requestedHistoryWindow || HOME_ROUTE.historyWindow,
@@ -338,6 +352,17 @@ function Dashboard() {
   );
 
   React.useEffect(() => {
+    const canonicalPath = (
+      window.location.pathname === "/"
+      && region === HOME_ROUTE.region
+      && countrySlug === HOME_ROUTE.country
+    )
+      ? "/"
+      : getLeaderboardPath(region, countrySlug);
+    applySeoMetadata(region, selectedCountry?.name || "", canonicalPath);
+  }, [countrySlug, region, selectedCountry]);
+
+  React.useEffect(() => {
     if (!isLoading && currentPlayers.length > 0 && countrySlug !== "all" && !selectedCountry) {
       window.history.replaceState({}, "", "/");
       setSearch("");
@@ -352,7 +377,7 @@ function Dashboard() {
     }
   }, [currentPlayers.length, pageSize]);
 
-  function updateRoute(updates, replace = false) {
+  function updateRoute(updates, replace = false, homepage = false) {
     const shouldDropSharedPins = route.sharedPinsParam
       && !Object.hasOwn(updates, "sharedPinsParam")
       && (
@@ -364,29 +389,25 @@ function Dashboard() {
     const nextRoute = {
       ...route,
       region,
-      country: countrySlug,
       pageSize,
       ...updates,
+      country: updates.country ?? countrySlug,
       sharedPinsParam: shouldDropSharedPins ? "" : updates.sharedPinsParam ?? route.sharedPinsParam,
     };
-    const params = new URLSearchParams();
-    if (nextRoute.region !== "europe") params.set("region", nextRoute.region);
-    if (nextRoute.country !== "all") params.set("country", nextRoute.country);
-    if (nextRoute.pageSize !== DEFAULT_PAGE_SIZE) params.set("limit", String(nextRoute.pageSize));
-    if (nextRoute.pinnedOnly) params.set("p", "1");
-    if (nextRoute.historyWindow !== "off") params.set("h", nextRoute.historyWindow);
-    if (nextRoute.sharedPinsParam) params.set("pins", nextRoute.sharedPinsParam);
-    if (nextRoute.demoHistory && canUseHistoryDemo()) params.set("demo", "history");
-
-    const query = params.toString();
-    const url = query ? `/?${query}` : "/";
+    const url = createLeaderboardUrl(nextRoute, {
+      homepage,
+      includeDemo: canUseHistoryDemo(),
+    });
     window.history[replace ? "replaceState" : "pushState"]({}, "", url);
     setRoute(nextRoute);
     trackPageView(url);
   }
 
   const changeRegion = (nextRegion) => updateRoute({ region: nextRegion, pinnedOnly: false });
-  const changeCountry = (country) => updateRoute({ country: country?.slug || "all", pinnedOnly: false });
+  const changeCountry = (country) => updateRoute({
+    country: country?.slug || "all",
+    pinnedOnly: false,
+  });
   const changePageSize = (nextPageSize) => updateRoute({ pageSize: nextPageSize });
   const changePinnedOnly = (pinnedOnly) => updateRoute({ pinnedOnly });
   const changeHistoryWindow = (historyWindow) => {
@@ -397,11 +418,15 @@ function Dashboard() {
     setSearch("");
     setFindJump(null);
     setPageResetVersion((version) => version + 1);
-    updateRoute({
-      ...HOME_ROUTE,
-      historyWindow: route.historyWindow,
-      demoHistory: route.demoHistory,
-    });
+    updateRoute(
+      {
+        ...HOME_ROUTE,
+        historyWindow: route.historyWindow,
+        demoHistory: route.demoHistory,
+      },
+      false,
+      true
+    );
   };
   const clearPinned = () => {
     setPinnedPlayers([]);
@@ -460,12 +485,10 @@ function Dashboard() {
     [activePinnedIds, currentDataRegion]
   );
   const shareView = async () => {
-    const compactShare = serializeCompactShareRoute(
-      route,
-      currentSharePins,
-      selectedCountry?.countryCode
-    );
-    const url = `${window.location.origin}/${compactShare ? `?s=${compactShare}` : ""}`;
+    const url = `${window.location.origin}${createLeaderboardUrl({
+      ...route,
+      sharedPinsParam: serializeSharedPins(currentSharePins),
+    })}`;
     try {
       await navigator.clipboard.writeText(url);
       setShareStatus("Copied");
@@ -496,14 +519,17 @@ function Dashboard() {
     <div className="app-shell">
       <main className="content" id="main-content">
         <header className="site-header">
-          <button
+          <a
             className="site-title"
-            type="button"
+            href="/"
             data-preserve-native-find="true"
-            onClick={resetHome}
+            onClick={(event) => {
+              event.preventDefault();
+              resetHome();
+            }}
           >
             Dota 2 Leaderboards
-          </button>
+          </a>
         </header>
         <Navigation
           region={region}

@@ -6,11 +6,11 @@ import argparse
 import json
 import os
 import socket
+import subprocess
 import tempfile
 import time
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -29,7 +29,7 @@ DEFAULT_INTERVAL = 30
 MIN_EXPECTED_PLAYERS = 1
 HISTORY_INTERVAL_SECONDS = 8 * 60 * 60
 HISTORY_RETENTION_SECONDS = 30 * 24 * 60 * 60
-SITE_URL = "https://dota2leaderboards.com/"
+SEO_GENERATOR = Path(__file__).with_name("generate_seo_pages.js")
 
 
 class PayloadValidationError(ValueError):
@@ -327,49 +327,24 @@ def sitemap_path(output_dir: Path) -> Path:
     return output_dir / "sitemap.xml"
 
 
-def format_sitemap_timestamp(timestamp: int) -> str:
-    return datetime.fromtimestamp(timestamp, timezone.utc).isoformat(timespec="seconds").replace(
-        "+00:00",
-        "Z",
+def write_sitemap(output_dir: Path) -> None:
+    result = subprocess.run(
+        [
+            "node",
+            str(SEO_GENERATOR),
+            "--sitemap-only",
+            "--data-dir",
+            str(output_dir),
+            "--sitemap",
+            str(sitemap_path(output_dir)),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
     )
-
-
-def read_payload_timestamp(output_dir: Path, region: str) -> int | None:
-    target = payload_path(output_dir, region)
-    if not target.is_file():
-        return None
-
-    with target.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-
-    timestamp = payload.get("fetched_at") or payload.get("time_posted")
-    if isinstance(timestamp, int) and timestamp > 0:
-        return timestamp
-    return None
-
-
-def write_sitemap(output_dir: Path, regions: tuple[str, ...]) -> None:
-    timestamps = [
-        timestamp
-        for region in regions
-        if (timestamp := read_payload_timestamp(output_dir, region)) is not None
-    ]
-    lastmod = max(timestamps) if timestamps else None
-    lastmod_line = (
-        f"    <lastmod>{format_sitemap_timestamp(lastmod)}</lastmod>\n"
-        if lastmod is not None
-        else ""
-    )
-    content = (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        "  <url>\n"
-        f"    <loc>{SITE_URL}</loc>\n"
-        f"{lastmod_line}"
-        "  </url>\n"
-        "</urlset>\n"
-    )
-    sitemap_path(output_dir).write_text(content, encoding="utf-8", newline="\n")
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "unknown error"
+        raise RuntimeError(f"sitemap generation failed: {detail}")
 
 
 def has_existing_payload(output_dir: Path, region: str) -> bool:
@@ -412,7 +387,7 @@ def update_once(
         if update_history(output_dir, region, payload, int(payload["fetched_at"])):
             print(f"{region}: wrote {history_path(output_dir, region)}")
 
-    write_sitemap(output_dir, REGIONS)
+    write_sitemap(output_dir)
     print(f"sitemap: wrote {sitemap_path(output_dir)}")
 
     kept = tuple(region for region in regions if region in failures)

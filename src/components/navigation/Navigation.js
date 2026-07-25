@@ -10,6 +10,7 @@ import MenuItem from "@mui/material/MenuItem";
 import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import { REGIONS } from "../../constants";
+import { getLeaderboardPath } from "../../utils/leaderboardRoute";
 import Flag from "../flag/Flag";
 import "./Navigation.css";
 
@@ -78,15 +79,21 @@ export default function Navigation({
     <section className="filters" aria-label="Leaderboard filters">
       <div className="region-tabs" role="group" aria-label="Region">
         {Object.entries(REGIONS).map(([value, label]) => (
-          <button
+          <a
             className={value === region ? "region-tab region-tab--active" : "region-tab"}
+            href={getLeaderboardPath(
+              value,
+              countrySlug
+            )}
             key={value}
-            onClick={() => onRegionChange(value)}
-            type="button"
-            aria-pressed={value === region}
+            onClick={(event) => {
+              event.preventDefault();
+              onRegionChange(value);
+            }}
+            aria-current={value === region ? "page" : undefined}
           >
             {label}
-          </button>
+          </a>
         ))}
       </div>
 
