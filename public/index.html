@@ -4,6 +4,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#090d12" />
+    <style id="seo-fallback-visibility">
+      html.js-enabled .seo-fallback {
+        display: none !important;
+      }
+    </style>
+    <script id="seo-fallback-bootstrap">
+      document.documentElement.classList.add("js-enabled");
+      window.addEventListener(
+        "load",
+        function () {
+          window.setTimeout(function () {
+            if (!document.querySelector(".app-shell")) {
+              document.documentElement.classList.remove("js-enabled");
+            }
+          }, 1000);
+        },
+        { once: true }
+      );
+    </script>
     <meta name="robots" content="index,follow" />
     <meta name="googlebot" content="index,follow" />
     <title>Dota 2 Leaderboard | Regional Rankings</title>

@@ -4,6 +4,7 @@ const path = require("path");
 const SITE_NAME = "Dota 2 Leaderboards";
 const HOME_TITLE = "Dota 2 Leaderboard | Regional Rankings";
 const SITE_URL = "https://dota2leaderboards.com";
+const STATIC_ROW_LIMIT = 100;
 const REGIONS = [
   { key: "europe", name: "Europe", path: "europe" },
   { key: "americas", name: "Americas", path: "americas" },
@@ -11,6 +12,7 @@ const REGIONS = [
   { key: "se_asia", name: "Southeast Asia", path: "southeast-asia" },
 ];
 const displayNames = new Intl.DisplayNames(["en"], { type: "region" });
+const countryNameCollator = new Intl.Collator("en", { sensitivity: "base" });
 
 function readOption(name, fallback = "") {
   const index = process.argv.indexOf(name);
@@ -145,7 +147,10 @@ function createPages(regionData) {
         name: countryName(code),
         players,
       }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => (
+        countryNameCollator.compare(a.name, b.name)
+        || a.code.localeCompare(b.code, "en")
+      ))
       .forEach((country) => {
         pages.push({
           type: "country",
@@ -226,6 +231,113 @@ function createSeoHead(page) {
   ].join("\n");
 }
 
+function formatUpdatedAt(value) {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "";
+  return `${new Date(timestamp).toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
+function createRegionLinks(page, pages) {
+  return pages
+    .filter(({ type }) => type === "region")
+    .map((regionPage) => {
+      const current = page.type !== "home" && page.region.key === regionPage.region.key
+        ? ' aria-current="page"'
+        : "";
+      return `        <a class="seo-fallback__region-link" href="${htmlEscape(regionPage.pathname)}"${current}>${htmlEscape(regionPage.region.name)}</a>`;
+    })
+    .join("\n");
+}
+
+function createCountryLinks(page, pages) {
+  if (page.type !== "region") return "";
+
+  const links = pages
+    .filter(({ type, region }) => type === "country" && region.key === page.region.key)
+    .map((countryPage) => `        <a href="${htmlEscape(countryPage.pathname)}">${htmlEscape(countryPage.country.name)}</a>`)
+    .join("\n");
+
+  return [
+    '      <nav class="seo-fallback__countries" aria-label="Country leaderboards">',
+    links,
+    "      </nav>",
+  ].join("\n");
+}
+
+function createLeaderboardRows(page) {
+  return page.players.slice(0, STATIC_ROW_LIMIT).map((player, index) => {
+    const code = typeof player.country === "string" ? player.country.toUpperCase() : "";
+    const country = /^[A-Z]{2}$/.test(code)
+      ? `<a href="/${htmlEscape(page.region.path)}/${htmlEscape(countryPath(code))}/">${htmlEscape(countryName(code))}</a>`
+      : "—";
+    const countryRank = page.type === "country"
+      ? `          <td>${index + 1}</td>\n`
+      : "";
+
+    return [
+      "        <tr>",
+      countryRank.trimEnd(),
+      `          <td>${htmlEscape(player.rank)}</td>`,
+      `          <td>${htmlEscape(player.name || "Anonymous player")}</td>`,
+      `          <td>${htmlEscape(player.team_tag || "—")}</td>`,
+      `          <td>${country}</td>`,
+      "        </tr>",
+    ].filter(Boolean).join("\n");
+  }).join("\n");
+}
+
+function createSeoBody(page, pages) {
+  const metadata = pageMetadata(page.region, page.country, page.pathname);
+  const heading = page.country
+    ? `${page.country.name} Dota 2 Leaderboard — ${page.region.name}`
+    : page.type === "region"
+      ? `${page.region.name} Dota 2 Leaderboard`
+      : SITE_NAME;
+  const updatedAt = formatUpdatedAt(page.lastModified);
+  const rowCount = Math.min(page.players.length, STATIC_ROW_LIMIT);
+  const countryRankHeader = page.type === "country"
+    ? "            <th scope=\"col\">Country rank</th>\n"
+    : "";
+  const parentLink = page.type === "country"
+    ? `      <p class="seo-fallback__breadcrumb"><a href="/">Dota 2 Leaderboards</a> / <a href="/${htmlEscape(page.region.path)}/">${htmlEscape(page.region.name)}</a> / ${htmlEscape(page.country.name)}</p>`
+    : "";
+  const countryLinks = createCountryLinks(page, pages);
+
+  return [
+    '  <div class="seo-fallback">',
+    '    <main class="seo-fallback__content">',
+    '      <header class="seo-fallback__header">',
+    '        <a class="seo-fallback__brand" href="/">Dota 2 Leaderboards</a>',
+    "      </header>",
+    '      <nav class="seo-fallback__regions" aria-label="Leaderboard regions">',
+    createRegionLinks(page, pages),
+    "      </nav>",
+    parentLink,
+    `      <h1>${htmlEscape(heading)}</h1>`,
+    `      <p class="seo-fallback__summary">${htmlEscape(metadata.description)} Showing the top ${rowCount.toLocaleString("en-US")} of ${page.players.length.toLocaleString("en-US")} ranked players.${updatedAt ? ` Updated <time datetime="${htmlEscape(page.lastModified)}">${htmlEscape(updatedAt)}</time>.` : ""}</p>`,
+    countryLinks,
+    '      <div class="seo-fallback__table-wrap">',
+    '        <table class="seo-fallback__table">',
+    `          <caption>Top ${rowCount.toLocaleString("en-US")} ${htmlEscape(page.country?.name || page.region.name)} players</caption>`,
+    "          <thead>",
+    "          <tr>",
+    countryRankHeader.trimEnd(),
+    '            <th scope="col">Region rank</th>',
+    '            <th scope="col">Player</th>',
+    '            <th scope="col">Team</th>',
+    '            <th scope="col">Country</th>',
+    "          </tr>",
+    "          </thead>",
+    "          <tbody>",
+    createLeaderboardRows(page),
+    "          </tbody>",
+    "        </table>",
+    "      </div>",
+    "    </main>",
+    "  </div>",
+  ].filter(Boolean).join("\n");
+}
+
 function replaceSeoHead(html, page) {
   const start = html.indexOf("<title>");
   const structuredDataStart = html.indexOf('<script id="seo-structured-data"', start);
@@ -234,6 +346,14 @@ function replaceSeoHead(html, page) {
     throw new Error("SEO metadata block is missing from index.html");
   }
   return `${html.slice(0, start)}${createSeoHead(page)}${html.slice(structuredDataEnd + 9)}`;
+}
+
+function replaceSeoBody(html, page, pages) {
+  const rootPattern = /<div id="root"[^>]*>\s*<\/div>/;
+  if (!rootPattern.test(html)) {
+    throw new Error("Empty root container is missing from index.html");
+  }
+  return html.replace(rootPattern, `<div id="root">\n${createSeoBody(page, pages)}\n</div>`);
 }
 
 function createSitemap(pages) {
@@ -263,7 +383,8 @@ function writeSeoPages(buildDir, pages) {
       ? indexPath
       : path.join(buildDir, ...page.pathname.split("/").filter(Boolean), "index.html");
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    fs.writeFileSync(outputPath, replaceSeoHead(baseHtml, page), "utf8");
+    const html = replaceSeoHead(baseHtml, page);
+    fs.writeFileSync(outputPath, replaceSeoBody(html, page, pages), "utf8");
   });
 }
 
@@ -290,4 +411,11 @@ function main() {
   process.stdout.write(`Generated ${pages.length} SEO URLs\n`);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = {
+  createPages,
+  createSeoBody,
+  createSitemap,
+  replaceSeoBody,
+};

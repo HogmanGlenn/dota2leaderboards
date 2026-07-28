@@ -28,6 +28,120 @@ body * {
   user-select: none;
 }
 
+.seo-fallback {
+  color: #f0f0ee;
+  font-family: "Roboto", "Segoe UI", sans-serif;
+}
+
+.seo-fallback__content {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0 48px;
+}
+
+.seo-fallback__header {
+  margin-bottom: 18px;
+}
+
+.seo-fallback__brand {
+  color: #f0f0ee;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.seo-fallback__regions {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #333;
+}
+
+.seo-fallback__region-link {
+  padding: 9px 12px;
+  border-bottom: 2px solid transparent;
+  color: #aaa7a2;
+  text-decoration: none;
+}
+
+.seo-fallback__region-link:hover,
+.seo-fallback__region-link:focus-visible,
+.seo-fallback__region-link[aria-current="page"] {
+  border-color: #448e85;
+  color: #f0f0ee;
+}
+
+.seo-fallback__breadcrumb,
+.seo-fallback__summary {
+  color: #aaa7a2;
+}
+
+.seo-fallback__breadcrumb {
+  margin: 0 0 12px;
+  font-size: 0.875rem;
+}
+
+.seo-fallback h1 {
+  margin: 0 0 8px;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+}
+
+.seo-fallback__summary {
+  max-width: 800px;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.seo-fallback a {
+  color: #79b5ad;
+}
+
+.seo-fallback__countries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 20px;
+  font-size: 0.875rem;
+}
+
+.seo-fallback__table-wrap {
+  overflow-x: auto;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #1e1e1e;
+}
+
+.seo-fallback__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.seo-fallback__table caption {
+  padding: 12px 14px;
+  color: #f0f0ee;
+  font-weight: 600;
+  text-align: left;
+}
+
+.seo-fallback__table th,
+.seo-fallback__table td {
+  padding: 9px 14px;
+  border-top: 1px solid #333;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.seo-fallback__table th {
+  color: #aaa7a2;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.seo-fallback__table td {
+  color: #f0f0ee;
+}
+
 button,
 input {
   font: inherit;
@@ -42,6 +156,26 @@ textarea {
   html,
   body {
     min-width: 0;
+  }
+
+  .seo-fallback__content {
+    width: min(100% - 20px, 1180px);
+    padding-top: 16px;
+  }
+
+  .seo-fallback__regions {
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+
+  .seo-fallback__region-link {
+    padding-inline: 6px;
+    font-size: 0.875rem;
+  }
+
+  .seo-fallback__table th,
+  .seo-fallback__table td {
+    padding-inline: 10px;
   }
 }
 

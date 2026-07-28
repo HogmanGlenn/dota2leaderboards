@@ -32,7 +32,8 @@
     "postbuild": "node scripts/generate_seo_pages.js",
     "generate:sitemap": "node scripts/generate_seo_pages.js --sitemap-only",
     "test": "react-scripts test",
-    "test:ci": "react-scripts test --watchAll=false",
+    "test:ci": "react-scripts test --watchAll=false && node scripts/test_generate_seo_pages.js",
+    "test:seo": "node scripts/test_generate_seo_pages.js",
     "eject": "react-scripts eject"
   },
   "browserslist": {
