@@ -49,7 +49,9 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 test("loads and renders leaderboard data", async () => {
   render(<App />);
@@ -63,6 +65,19 @@ test("loads and renders leaderboard data", async () => {
     expect.stringContaining("/data/europe/v0001.json"),
     expect.objectContaining({ signal: undefined })
   );
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+test("prefetches a region on keyboard focus and reuses it on navigation", async () => {
+  render(<App />);
+  await screen.findByText("Top Carry");
+  expect(fetch).toHaveBeenCalledTimes(1);
+
+  await act(async () => fireEvent.focus(screen.getByRole("link", { name: "China" })));
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "China" })));
+  await waitFor(() => expect(document.title).toBe("Dota 2 Leaderboard | China"));
+  expect(fetch).toHaveBeenCalledTimes(2);
 });
 
 test("renders flags from the public SVG asset path", () => {
@@ -126,6 +141,32 @@ test("returns an unknown country to the homepage after data loads", async () => 
   expect(window.location.pathname).toBe("/");
 });
 
+test("opens a previously missing country URL when new data includes that country", async () => {
+  window.history.replaceState({}, "", "/china/finland/");
+  let hasFinland = false;
+  global.fetch = jest.fn((url) => Promise.resolve({
+    ok: true,
+    status: 200,
+    json: async () => String(url).includes("/china/") ? {
+      ...payload,
+      leaderboard: [{ rank: 1, name: "China Player", country: hasFinland ? "fi" : "cn" }],
+    } : payload,
+  }));
+
+  const firstVisit = render(<App />);
+  await waitFor(() => expect(window.location.pathname).toBe("/"));
+  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
+  firstVisit.unmount();
+
+  hasFinland = true;
+  window.history.replaceState({}, "", "/china/finland/");
+  render(<App />);
+  expect(await screen.findByText("China Player")).toBeInTheDocument();
+  expect(window.location.pathname).toBe("/china/finland/");
+  expect(screen.getByLabelText("Filter by country")).toHaveValue("Finland");
+  expect(document.title).toBe("Dota 2 Leaderboard | Finland, China");
+});
+
 test("loads a country page and a 7d window from its permanent URL", async () => {
   window.history.replaceState({}, "", "/europe/finland/?h=7d");
 
@@ -141,6 +182,98 @@ test("loads a country page and a 7d window from its permanent URL", async () => 
   expect(window.location.pathname).toBe("/europe/finland/");
   expect(window.location.search).toBe("?h=7d");
   expect(document.title).toBe("Dota 2 Leaderboard | Finland, Europe");
+  await act(async () => userEvent.hover(screen.getByRole("link", { name: "Americas" })));
+  await waitFor(() => expect(screen.getByRole("link", { name: "Americas" })).toHaveAttribute(
+    "href",
+    "/americas/finland/"
+  ));
+  expect(screen.getByRole("link", { name: "Americas" })).toHaveAttribute(
+    "href",
+    "/americas/finland/"
+  );
+});
+
+test("returns to the homepage when the selected country has no players in another region", async () => {
+  window.history.replaceState({}, "", "/europe/finland/?limit=50");
+  const chinaPayload = createPayload(60);
+  chinaPayload.leaderboard.forEach((player) => { player.country = "cn"; });
+  global.fetch = jest.fn((url) => Promise.resolve({
+    ok: true,
+    status: 200,
+    json: async () => String(url).includes("/china/") ? chinaPayload : createPayload(60),
+  }));
+
+  render(<App />);
+  await screen.findByText("Player 25");
+  await userEvent.type(screen.getByLabelText("Player or team"), "Player 2");
+
+  expect(screen.getByRole("link", { name: "China" })).toHaveAttribute("href", "/china/finland/");
+  await act(async () => userEvent.hover(screen.getByRole("link", { name: "China" })));
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "China" })));
+
+  await waitFor(() => expect(window.location.pathname).toBe("/"));
+  expect(window.location.search).toBe("");
+  expect(await screen.findByText("Player 1")).toBeInTheDocument();
+  expect(screen.getByLabelText("Filter by country")).toHaveValue("");
+  expect(screen.getByLabelText("Player or team")).toHaveValue("");
+  expect(document.title).toBe("Dota 2 Leaderboard | Regional Rankings");
+});
+
+test("returns to the homepage after a pending load confirms the selected country is missing", async () => {
+  window.history.replaceState({}, "", "/europe/finland/");
+  let resolveChina;
+  const chinaRequest = new Promise((resolve) => { resolveChina = resolve; });
+  global.fetch = jest.fn((url) => String(url).includes("/china/")
+    ? chinaRequest
+    : Promise.resolve({ ok: true, status: 200, json: async () => payload }));
+
+  render(<App />);
+  await screen.findByText("Top Carry");
+  expect(screen.getByRole("link", { name: "China" })).toHaveAttribute("href", "/china/finland/");
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "China" })));
+  expect(window.location.pathname).toBe("/china/finland/");
+
+  await act(async () => resolveChina({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      ...payload,
+      leaderboard: [{ rank: 1, name: "China Player", country: "cn" }],
+    }),
+  }));
+
+  await waitFor(() => expect(window.location.pathname).toBe("/"));
+  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
+  expect(document.title).toBe("Dota 2 Leaderboard | Regional Rankings");
+});
+
+test("keeps a failed country request on its country URL and allows retrying", async () => {
+  window.history.replaceState({}, "", "/europe/finland/");
+  let chinaFails = true;
+  global.fetch = jest.fn((url) => {
+    const isChina = String(url).includes("/china/");
+    return Promise.resolve({
+      ok: !(isChina && chinaFails),
+      status: isChina && chinaFails ? 503 : 200,
+      json: async () => ({
+        ...payload,
+        leaderboard: isChina ? [{ rank: 1, name: "China Player", country: "fi" }] : payload.leaderboard,
+      }),
+    });
+  });
+
+  render(<App />);
+  await screen.findByText("Top Carry");
+  expect(screen.getByRole("link", { name: "China" })).toHaveAttribute("href", "/china/finland/");
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "China" })));
+  await screen.findByText("Leaderboard request failed (503).");
+  expect(window.location.pathname).toBe("/china/finland/");
+  expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+
+  chinaFails = false;
+  await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+  expect(await screen.findByText("China Player")).toBeInTheDocument();
+  expect(window.location.pathname).toBe("/china/finland/");
 });
 
 test("filters players by name or team", async () => {
@@ -180,7 +313,7 @@ test("stores the selected region in a crawlable path", async () => {
   render(<App />);
   await screen.findByText("Top Carry");
 
-  await userEvent.click(screen.getByRole("link", { name: "Americas" }));
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "Americas" })));
 
   await waitFor(() => expect(window.location.pathname).toBe("/americas/"));
   expect(window.location.search).toBe("");
@@ -199,7 +332,7 @@ test("updates page metadata when region changes", async () => {
   render(<App />);
   await screen.findByText("Top Carry");
 
-  await userEvent.click(screen.getByRole("link", { name: "Americas" }));
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "Americas" })));
 
   await waitFor(() => expect(window.location.pathname).toBe("/americas/"));
   expect(document.title).toBe("Dota 2 Leaderboard | Americas");
@@ -217,7 +350,7 @@ test("keeps country, search, and visible row count when changing region", async 
   await screen.findByText("Player 25");
 
   await userEvent.type(screen.getByLabelText("Player or team"), "Player 2");
-  await userEvent.click(screen.getByRole("link", { name: "Americas" }));
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "Americas" })));
 
   await waitFor(() => expect(window.location.pathname).toBe("/americas/finland/"));
   expect(window.location.search).toBe("?limit=50");
@@ -227,23 +360,30 @@ test("keeps country, search, and visible row count when changing region", async 
 
 test("keeps existing country rows visible while a new region loads", async () => {
   window.history.replaceState({}, "", "/?country=finland");
+  let resolveAmericas;
   global.fetch = jest.fn()
     .mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => createPayload(30),
     })
-    .mockReturnValueOnce(new Promise(() => {}));
+    .mockReturnValueOnce(new Promise((resolve) => { resolveAmericas = resolve; }));
 
   render(<App />);
   await screen.findByText("Player 1");
 
-  await userEvent.click(screen.getByRole("link", { name: "Americas" }));
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "Americas" })));
 
   await waitFor(() => expect(window.location.pathname).toBe("/americas/finland/"));
   expect(window.location.search).toBe("");
   expect(screen.getByText("Player 1")).toBeInTheDocument();
   expect(document.querySelector(".MuiSkeleton-root")).not.toBeInTheDocument();
+  expect(screen.getByRole("progressbar", { name: "Loading Americas leaderboard" })).toBeInTheDocument();
+  expect(screen.getByRole("group", { name: "Region" })).toHaveAttribute("aria-busy", "true");
+
+  await act(async () => resolveAmericas({ ok: true, status: 200, json: async () => createPayload(30) }));
+  await waitFor(() => expect(screen.queryByRole("progressbar")).not.toBeInTheDocument());
+  expect(screen.getByRole("group", { name: "Region" })).toHaveAttribute("aria-busy", "false");
 });
 
 test("clicking the title resets the route", async () => {
@@ -251,7 +391,7 @@ test("clicking the title resets the route", async () => {
   render(<App />);
   await screen.findByText("Top Carry");
 
-  await userEvent.click(screen.getByRole("link", { name: "Dota 2 Leaderboards" }));
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "Dota 2 Leaderboards" })));
 
   await waitFor(() => expect(window.location.search).toBe(""));
   await waitFor(() =>
@@ -296,7 +436,7 @@ test("clicking the title keeps rank change visibility", async () => {
   render(<App />);
   await screen.findByText("Top Carry");
 
-  await userEvent.click(screen.getByRole("link", { name: "Dota 2 Leaderboards" }));
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "Dota 2 Leaderboards" })));
 
   await waitFor(() => expect(window.location.search).toBe("?h=8h"));
   expect(screen.getByRole("region", { name: "Player rankings" })).toHaveClass("leaderboard-card--history");
@@ -316,7 +456,7 @@ test("clicking the title returns the leaderboard to page one", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Next page" }));
   expect(getPageIndicator(2)).toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole("link", { name: "Dota 2 Leaderboards" }));
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "Dota 2 Leaderboards" })));
 
   await waitFor(() => expect(getPageIndicator(1)).toBeInTheDocument());
   expect(screen.getByText("Player 1")).toBeInTheDocument();
@@ -771,7 +911,7 @@ test("clicking the title clears a stale native find jump", async () => {
   expect(screen.getByText("Player 60")).toBeInTheDocument();
 
   window.getSelection().removeAllRanges();
-  await userEvent.click(screen.getByRole("link", { name: "Dota 2 Leaderboards" }));
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "Dota 2 Leaderboards" })));
 
   await waitFor(() => expect(getPageIndicator(1)).toBeInTheDocument());
   expect(screen.getByText("Player 1")).toBeInTheDocument();
@@ -1241,7 +1381,7 @@ test("keeps the previous region intact until the next region and history are rea
   const initialRows = Array.from(document.querySelectorAll("[data-player-row='true']"));
   const initialBodyHeight = screen.getByTestId("leaderboard-body").style.height;
 
-  await userEvent.click(screen.getByRole("link", { name: "Americas" }));
+  await act(async () => userEvent.click(screen.getByRole("link", { name: "Americas" })));
 
   expect(screen.getByText("+4")).toBeInTheDocument();
   expect(screen.getByText("Top Carry")).toBeInTheDocument();

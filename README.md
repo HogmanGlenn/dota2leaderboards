@@ -30,6 +30,22 @@ npm run build
 
 The production output is written to `build/`. The post-build step creates static HTML entry points for each current region and country leaderboard and writes their canonical URLs to the deployed sitemap.
 
+## Search indexing
+
+Country pages are generated from the current ranked players in each region at every build. A country that gains players automatically gets its page and sitemap entry again; absence from one snapshot does not permanently exclude it. Region tabs preserve the selected country. If the destination's successfully loaded data has no players from that country, the app returns to the main page.
+
+The build checks that every sitemap URL has a generated HTML page with its own canonical URL, that leaderboard pages allow indexing, and that static leaderboard links point to generated pages. Missing static pages use GitHub Pages' HTTP 404 response and redirect visitors to the main page with JavaScript and a meta-refresh fallback. A failed data request keeps the requested country URL available for retry, because a failed request does not establish whether the country exists.
+
+The October 2, 2026 Search Console export ends on September 21: 361 URLs were indexed, with 63 not found, 26 redirects, 4 crawled but not indexed, and 48 discovered but not indexed. The summary export has no affected URLs, so it cannot identify which individual exclusions need repair. Export the URL examples from an issue's details to investigate them. Expected trailing-slash redirects and currently unavailable country pages do not need to be indexed. See [Google's Page indexing report guidance](https://support.google.com/webmasters/answer/7440203?hl=en).
+
+## Loading and analytics follow-up
+
+Each generated page preloads only its own region's leaderboard. Other regions are fetched when their tabs are hovered, focused, or opened, and reused from the cache. A loading indicator in the selected tab marks pending region switches while the previous rows remain visible. Rank history loads only when enabled.
+
+Analytics behavior is unchanged in this release. The GA4 web stream currently enables automatic browser-history page views. Before adopting manual page-view tracking, disable **Page changes based on browser history events** in the stream's Enhanced measurement settings. `send_page_view: false` disables the initial automatic view but does not disable automatic history views. See [Google's manual page-view guidance](https://developers.google.com/analytics/devguides/collection/ga4/views#disable_page_changes_based_on_browser_history_events).
+
+The supplied analytics snapshot covers July 4 through October 1, 2026, with 2,054 active users and 50.6 seconds of average engagement. It has no device breakdown, feature-event breakdown, or Search Console query/click/position data. The accompanying Coverage ZIP contains the earlier indexing export, so it does not establish search click-through rates or query-specific opportunities.
+
 ## Leaderboard data
 
 Current snapshots are stored in `public/data/<region>/v0001.json`. Rank history is stored separately in `public/data/<region>/history.v0001.json` so refreshing a leaderboard cannot discard previously collected history.

@@ -1,11 +1,14 @@
 const assert = require("assert/strict");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
+const { execFileSync } = require("child_process");
 const {
   createPages,
   createSeoBody,
   createSitemap,
   replaceSeoBody,
+  validateSeoPages,
 } = require("./generate_seo_pages");
 
 function player(rank, name, country = "", teamTag = "") {
@@ -89,5 +92,79 @@ assert.match(documentShell, /html\.js-enabled \.seo-fallback\s*{\s*display: none
 assert.match(documentShell, /document\.documentElement\.classList\.add\("js-enabled"\)/);
 assert.match(documentShell, /if \(!document\.querySelector\("\.app-shell"\)\)/);
 assert.match(documentShell, /document\.documentElement\.classList\.remove\("js-enabled"\)/);
+
+const missingPage = fs.readFileSync(path.join(__dirname, "..", "public", "404.html"), "utf8");
+assert.match(missingPage, /window\.location\.replace\("\/"\)/);
+assert.match(missingPage, /http-equiv="refresh" content="0; url=\/"/);
+
+const temporaryDir = fs.mkdtempSync(path.join(os.tmpdir(), "d2l-seo-"));
+try {
+  const buildDir = path.join(temporaryDir, "build");
+  const dataDir = path.join(temporaryDir, "data");
+  fs.mkdirSync(buildDir);
+  fs.writeFileSync(path.join(buildDir, "index.html"), documentShell);
+  regions.forEach((region) => {
+    fs.mkdirSync(path.join(dataDir, region.key), { recursive: true });
+    fs.writeFileSync(path.join(dataDir, region.key, "v0001.json"), JSON.stringify({
+      fetched_at: 1785217552,
+      leaderboard: Array.from(region.countries.values()).flat(),
+    }));
+  });
+  execFileSync(process.execPath, [
+    path.join(__dirname, "generate_seo_pages.js"),
+    "--build-dir", buildDir,
+    "--data-dir", dataDir,
+  ]);
+
+  const sitemapPath = path.join(buildDir, "sitemap.xml");
+  validateSeoPages(buildDir, pages, sitemapPath);
+  const finlandPath = path.join(buildDir, "europe", "finland", "index.html");
+  const countryHtml = fs.readFileSync(finlandPath, "utf8");
+  assert.match(countryHtml, /href="https:\/\/dota2leaderboards\.com\/europe\/finland\/"/);
+  const americasHtml = fs.readFileSync(path.join(buildDir, "americas", "index.html"), "utf8");
+  assert.match(americasHtml, /href="\/data\/americas\/v0001\.json"/);
+  assert.doesNotMatch(americasHtml, /href="\/data\/europe\/v0001\.json"/);
+
+  fs.writeFileSync(finlandPath, countryHtml.replace("/data/europe/v0001.json", "/data/americas/v0001.json"));
+  assert.throws(() => validateSeoPages(buildDir, pages, sitemapPath), /Incorrect leaderboard data preload/);
+
+  fs.writeFileSync(finlandPath, countryHtml.replace("</main>", '<a href="/china/finland/">China</a></main>'));
+  assert.throws(() => validateSeoPages(buildDir, pages, sitemapPath), /Broken leaderboard link/);
+  fs.writeFileSync(finlandPath, countryHtml.replace('rel="canonical"', 'rel="alternate"'));
+  assert.throws(() => validateSeoPages(buildDir, pages, sitemapPath), /incorrect canonical/);
+  fs.writeFileSync(finlandPath, countryHtml.replace('content="index,follow"', 'content="noindex,follow"'));
+  assert.throws(() => validateSeoPages(buildDir, pages, sitemapPath), /marked noindex/);
+  fs.writeFileSync(finlandPath, countryHtml);
+  fs.writeFileSync(sitemapPath, createSitemap([...pages, pages[0]]));
+  assert.throws(() => validateSeoPages(buildDir, pages, sitemapPath), /exactly once/);
+  fs.writeFileSync(sitemapPath, createSitemap(pages));
+  fs.unlinkSync(finlandPath);
+  assert.throws(() => validateSeoPages(buildDir, pages, sitemapPath), /ENOENT/);
+
+  const newPlayer = player(2, "New Finland Player", "fi");
+  const futureAmericas = {
+    ...regions[1],
+    players: [...regions[1].players, newPlayer],
+    countries: new Map([...regions[1].countries, ["FI", [newPlayer]]]),
+  };
+  const futurePages = createPages([regions[0], futureAmericas]);
+  assert.ok(!pages.some(({ pathname }) => pathname === "/americas/finland/"));
+  fs.writeFileSync(path.join(dataDir, "americas", "v0001.json"), JSON.stringify({
+    fetched_at: 1785217552,
+    leaderboard: futureAmericas.players,
+  }));
+  fs.writeFileSync(path.join(buildDir, "index.html"), documentShell);
+  execFileSync(process.execPath, [
+    path.join(__dirname, "generate_seo_pages.js"),
+    "--build-dir", buildDir,
+    "--data-dir", dataDir,
+  ]);
+  validateSeoPages(buildDir, futurePages, sitemapPath);
+  const newCountryHtml = fs.readFileSync(path.join(buildDir, "americas", "finland", "index.html"), "utf8");
+  assert.match(newCountryHtml, /New Finland Player/);
+  assert.match(fs.readFileSync(sitemapPath, "utf8"), /https:\/\/dota2leaderboards\.com\/americas\/finland\//);
+} finally {
+  fs.rmSync(temporaryDir, { recursive: true, force: true });
+}
 
 process.stdout.write(`SEO generator tests passed (${pages.length} pages)\n`);

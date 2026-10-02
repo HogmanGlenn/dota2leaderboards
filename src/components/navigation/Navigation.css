@@ -36,6 +36,18 @@
   display: none;
 }
 
+.region-tab__loading {
+  position: absolute;
+  right: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .region-tabs .region-tab__loading,
+  .region-tabs .region-tab__loading circle {
+    animation: none;
+  }
+}
+
 .region-tab:hover {
   color: #f0f0ee;
   border-color: #3d3d3d;

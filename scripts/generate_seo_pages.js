@@ -383,8 +383,41 @@ function writeSeoPages(buildDir, pages) {
       ? indexPath
       : path.join(buildDir, ...page.pathname.split("/").filter(Boolean), "index.html");
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    const html = replaceSeoHead(baseHtml, page);
+    const html = replaceSeoHead(baseHtml, page).replace(
+      /(<link\b[^>]*\bid="leaderboard-data-preload"[^>]*\bhref=")[^"]+/,
+      `$1/data/${page.region.key}/v0001.json`
+    );
     fs.writeFileSync(outputPath, replaceSeoBody(html, page, pages), "utf8");
+  });
+}
+
+function validateSeoPages(buildDir, pages, sitemapPath) {
+  const paths = new Set(pages.map((page) => page.pathname));
+  const sitemap = fs.readFileSync(sitemapPath, "utf8");
+  const urls = Array.from(sitemap.matchAll(/<loc>([^<]+)<\/loc>/g), (match) => match[1]);
+  if (urls.length !== pages.length || new Set(urls).size !== pages.length) {
+    throw new Error("Sitemap must contain each generated page exactly once");
+  }
+
+  pages.forEach((page) => {
+    const outputPath = path.join(buildDir, ...page.pathname.split("/").filter(Boolean), "index.html");
+    const html = fs.readFileSync(outputPath, "utf8");
+    const canonical = `${SITE_URL}${page.pathname}`;
+    if (!urls.includes(canonical) || !html.includes(`<link rel="canonical" href="${canonical}"`)) {
+      throw new Error(`Missing or incorrect canonical URL: ${page.pathname}`);
+    }
+    if (/<meta\b[^>]*\bcontent="[^"]*\bnoindex\b/i.test(html)) {
+      throw new Error(`Generated leaderboard is marked noindex: ${page.pathname}`);
+    }
+    const preloads = Array.from(html.matchAll(/<link\b[^>]*href="([^"]*\/data\/[^"]*\/v0001\.json)"[^>]*>/g), (match) => match[1]);
+    if (preloads.length !== 1 || preloads[0] !== `/data/${page.region.key}/v0001.json`) {
+      throw new Error(`Incorrect leaderboard data preload: ${page.pathname}`);
+    }
+    for (const [, href] of html.matchAll(/href="(\/[^"?#]*)"/g)) {
+      if (href.endsWith("/") && !paths.has(href)) {
+        throw new Error(`Broken leaderboard link on ${page.pathname}: ${href}`);
+      }
+    }
   });
 }
 
@@ -407,7 +440,10 @@ function main() {
   const pages = createPages(regionData);
   fs.mkdirSync(path.dirname(sitemapPath), { recursive: true });
   fs.writeFileSync(sitemapPath, createSitemap(pages), "utf8");
-  if (!sitemapOnly) writeSeoPages(buildDir, pages);
+  if (!sitemapOnly) {
+    writeSeoPages(buildDir, pages);
+    validateSeoPages(buildDir, pages, sitemapPath);
+  }
   process.stdout.write(`Generated ${pages.length} SEO URLs\n`);
 }
 
@@ -418,4 +454,5 @@ module.exports = {
   createSeoBody,
   createSitemap,
   replaceSeoBody,
+  validateSeoPages,
 };

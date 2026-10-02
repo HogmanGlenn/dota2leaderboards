@@ -4,6 +4,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import Autocomplete from "@mui/material/Autocomplete";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import MenuItem from "@mui/material/MenuItem";
@@ -25,6 +26,8 @@ const HISTORY_OPTION_LABELS = {
 export default function Navigation({
   region,
   onRegionChange,
+  onRegionPrefetch,
+  isRegionLoading,
   countries,
   selectedCountry,
   onCountryChange,
@@ -77,22 +80,26 @@ export default function Navigation({
 
   return (
     <section className="filters" aria-label="Leaderboard filters">
-      <div className="region-tabs" role="group" aria-label="Region">
+      <div className="region-tabs" role="group" aria-label="Region" aria-busy={isRegionLoading}>
         {Object.entries(REGIONS).map(([value, label]) => (
           <a
             className={value === region ? "region-tab region-tab--active" : "region-tab"}
-            href={getLeaderboardPath(
-              value,
-              countrySlug
-            )}
+            href={getLeaderboardPath(value, countrySlug)}
             key={value}
+            onMouseEnter={() => onRegionPrefetch(value)}
+            onFocus={() => onRegionPrefetch(value)}
             onClick={(event) => {
+              if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
               event.preventDefault();
               onRegionChange(value);
             }}
             aria-current={value === region ? "page" : undefined}
+            aria-label={label}
           >
             {label}
+            {isRegionLoading && value === region && (
+              <CircularProgress className="region-tab__loading" size={10} color="inherit" aria-label={`Loading ${label} leaderboard`} />
+            )}
           </a>
         ))}
       </div>

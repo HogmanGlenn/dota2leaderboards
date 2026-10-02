@@ -274,12 +274,6 @@ function Dashboard() {
   }, [loadHistory, loadRegion, region, requestVersion, route.demoHistory, route.historyWindow]);
 
   React.useEffect(() => {
-    Object.keys(REGIONS).forEach((targetRegion) => {
-      loadRegion(targetRegion).catch(() => {});
-    });
-  }, [loadRegion, requestVersion]);
-
-  React.useEffect(() => {
     if (!saveStatus) return undefined;
     const timeout = window.setTimeout(() => setSaveStatus(""), 900);
     return () => window.clearTimeout(timeout);
@@ -363,13 +357,13 @@ function Dashboard() {
   }, [countrySlug, region, selectedCountry]);
 
   React.useEffect(() => {
-    if (!isLoading && currentPlayers.length > 0 && countrySlug !== "all" && !selectedCountry) {
+    if (!isLoading && !error && leaderboard.region === region && currentPlayers.length > 0 && countrySlug !== "all" && !selectedCountry) {
       window.history.replaceState({}, "", "/");
       setSearch("");
       setRoute({ ...HOME_ROUTE });
       trackPageView("/");
     }
-  }, [countrySlug, currentPlayers.length, isLoading, selectedCountry]);
+  }, [countrySlug, currentPlayers.length, error, isLoading, leaderboard.region, region, selectedCountry]);
 
   React.useEffect(() => {
     if (currentPlayers.length > 0 && pageSize !== DEFAULT_PAGE_SIZE && pageSize > currentPlayers.length) {
@@ -534,6 +528,8 @@ function Dashboard() {
         <Navigation
           region={region}
           onRegionChange={changeRegion}
+          onRegionPrefetch={(targetRegion) => loadRegion(targetRegion).catch(() => {})}
+          isRegionLoading={isLoading && leaderboard.region !== region}
           countries={countries}
           selectedCountry={selectedCountry}
           onCountryChange={changeCountry}
