@@ -6,6 +6,16 @@ export function pinnedPlayerId(region, playerKey) {
   return `${region}:${playerKey}`;
 }
 
+export function resolvePinnedPlayerIds(ids, region, players) {
+  const aliases = new Map();
+  players.forEach((player) => {
+    (player.playerKeyAliases || []).forEach((key) => {
+      aliases.set(pinnedPlayerId(region, key), pinnedPlayerId(region, player.playerKey));
+    });
+  });
+  return new Set(Array.from(ids, (id) => aliases.get(id) || id));
+}
+
 export function readPinnedPlayers(storage = window.localStorage) {
   try {
     const parsed = JSON.parse(storage.getItem(PIN_STORAGE_KEY) || "[]");
@@ -27,11 +37,11 @@ export function writePinnedPlayers(pins, storage = window.localStorage) {
 }
 
 export function togglePinnedPlayer(pins, region, player) {
-  const id = pinnedPlayerId(region, player.playerKey);
-  const existingIndex = pins.findIndex((pin) => pinnedPlayerId(pin.region, pin.playerKey) === id);
+  const keys = new Set([player.playerKey, ...(player.playerKeyAliases || [])]);
+  const matches = (pin) => pin.region === region && keys.has(pin.playerKey);
 
-  if (existingIndex >= 0) {
-    return pins.filter((_, index) => index !== existingIndex);
+  if (pins.some(matches)) {
+    return pins.filter((pin) => !matches(pin));
   }
 
   const nextPin = {

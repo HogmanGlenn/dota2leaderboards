@@ -58,3 +58,33 @@ test.each([
 ])("rejects invalid compact share payload %p", (value) => {
   expect(parseCompactShareRoute(value)).toBeNull();
 });
+
+test("keeps version-1 custom-link settings and maximum cross-region pin payloads compatible", () => {
+  const regions = [["europe", "e"], ["americas", "a"], ["china", "c"], ["se_asia", "s"]];
+  const countries = [["all", "", ""], ["finland", "fi", "FI"], ["aland_islands", "_aland_islands", ""]];
+  const pins = Array.from({ length: 50 }, (_, index) => ({
+    region: regions[index % regions.length][0], playerKey: `plegacy${index.toString(36)}`,
+  }));
+  const compactGroups = regions.map(([region, code]) => (
+    `${code}${pins.filter((pin) => pin.region === region).map((pin) => pin.playerKey.slice(1)).join(",")}`
+  )).join("~");
+  const sharedPinsParam = regions.map(([region]) => (
+    `${region}.${pins.filter((pin) => pin.region === region).map((pin) => pin.playerKey).join(",")}`
+  )).join("~");
+
+  for (const [region, code] of regions) {
+    for (const [country, countryToken, countryCode] of countries) {
+      for (const pageSize of [10, 25, 50, 100, 250, 500, 1000, 2500, 5000]) {
+        ["off", "8h", "24h", "7d", "30d"].forEach((historyWindow, historyIndex) => {
+          for (const pinnedOnly of [false, true]) {
+            const state = historyIndex * 2 + Number(pinnedOnly);
+            const legacyPayload = `1${code}.${countryToken}.${pageSize === 25 ? "" : pageSize.toString(36)}.${state ? state.toString(36) : ""}.${compactGroups}`;
+            const route = { region, country, pageSize, historyWindow, pinnedOnly };
+            expect(parseCompactShareRoute(legacyPayload)).toEqual({ ...route, sharedPinsParam });
+            expect(serializeCompactShareRoute(route, pins, countryCode)).toBe(legacyPayload);
+          }
+        });
+      }
+    }
+  }
+});

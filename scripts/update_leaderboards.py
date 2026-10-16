@@ -9,12 +9,13 @@ import socket
 import subprocess
 import tempfile
 import time
-import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+from player_identity import assign_player_identities, create_player_key
 
 
 REGIONS = ("americas", "europe", "se_asia", "china")
@@ -153,41 +154,6 @@ def write_payload(output_dir: Path, region: str, payload: dict[str, Any]) -> Non
         raise
 
 
-def normalize_player_name(name: str) -> str:
-    return " ".join(unicodedata.normalize("NFKC", name).strip().lower().split())
-
-
-def hash_base36(value: str) -> str:
-    hash_value = 0x811C9DC5
-    encoded = value.encode("utf-16le")
-    for index in range(0, len(encoded), 2):
-        code_unit = encoded[index] | (encoded[index + 1] << 8)
-        hash_value ^= code_unit
-        hash_value = (hash_value * 0x01000193) & 0xFFFFFFFF
-
-    digits = "0123456789abcdefghijklmnopqrstuvwxyz"
-    if hash_value == 0:
-        return "p0"
-
-    encoded_hash = ""
-    while hash_value:
-        hash_value, remainder = divmod(hash_value, 36)
-        encoded_hash = digits[remainder] + encoded_hash
-    return f"p{encoded_hash}"
-
-
-def create_player_key(region: str, player: dict[str, Any]) -> str:
-    country = player.get("country")
-    team_id = player.get("team_id")
-    parts = (
-        region,
-        normalize_player_name(player.get("name", "")),
-        "" if team_id is None else str(team_id),
-        country.lower() if isinstance(country, str) else "",
-    )
-    return hash_base36("|".join(parts))
-
-
 def history_path(output_dir: Path, region: str) -> Path:
     return output_dir / region / "history.v0001.json"
 
@@ -204,6 +170,19 @@ def read_history(output_dir: Path, region: str) -> dict[str, Any]:
         raise PayloadValidationError(f"{region}: history is not a JSON object")
     if not isinstance(history.get("players"), list) or not isinstance(history.get("samples"), list):
         raise PayloadValidationError(f"{region}: history is not in the expected format")
+    if any(not isinstance(key, str) for key in history["players"]):
+        raise PayloadValidationError(f"{region}: history has invalid player keys")
+    for sample in history["samples"]:
+        if (
+            not isinstance(sample, dict)
+            or type(sample.get("t")) is not int
+            or not isinstance(sample.get("i"), list)
+            or not isinstance(sample.get("r"), list)
+            or len(sample["i"]) != len(sample["r"])
+            or any(type(index) is not int or not 0 <= index < len(history["players"]) for index in sample["i"])
+            or any(type(rank) is not int or rank < 1 for rank in sample["r"])
+        ):
+            raise PayloadValidationError(f"{region}: history has an invalid rank sample")
     return history
 
 
@@ -242,7 +221,7 @@ def history_is_due(history: dict[str, Any], timestamp: int) -> bool:
 def build_rank_snapshot(region: str, payload: dict[str, Any]) -> dict[str, int]:
     snapshot: dict[str, int] = {}
     for player in payload["leaderboard"]:
-        player_key = create_player_key(region, player)
+        player_key = player.get("player_key") or create_player_key(region, player)
         rank = int(player["rank"])
         existing_rank = snapshot.get(player_key)
         if existing_rank is None or rank < existing_rank:
@@ -366,7 +345,16 @@ def update_once(
         print(f"{region}: downloading")
         try:
             payload = fetch_region(region, attempts=attempts, timeout=timeout)
-        except RuntimeError as error:
+            previous_path = payload_path(output_dir, region)
+            previous = None
+            if previous_path.is_file():
+                with previous_path.open("r", encoding="utf-8") as handle:
+                    previous = validate_payload(json.load(handle), region)
+            payload = assign_player_identities(region, payload, previous)
+            # Read existing history before replacing the snapshot. Corrupt state
+            # must never silently start a fresh registry or discard tracking.
+            read_history(output_dir, region)
+        except (RuntimeError, ValueError, OSError) as error:
             failures[region] = str(error)
             if has_existing_payload(output_dir, region):
                 print(f"{region}: keeping existing data ({error})")

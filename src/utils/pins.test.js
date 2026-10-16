@@ -1,6 +1,7 @@
 import {
   parseSharedPins,
   pinnedPlayerId,
+  resolvePinnedPlayerIds,
   serializeSharedPins,
   togglePinnedPlayer,
 } from "./pins";
@@ -24,6 +25,23 @@ test("toggles compact local pin entries", () => {
     rank: 12,
   }]);
   expect(togglePinnedPlayer(pinned, "europe", player)).toEqual([]);
+});
+
+test("resolves old aliases, deduplicates pins, and preserves other regions and absent players", () => {
+  const ids = new Set(["europe:pold", "europe:pstable", "europe:pabsent", "americas:pold"]);
+  const resolved = resolvePinnedPlayerIds(ids, "europe", [{ playerKey: "pstable", playerKeyAliases: ["pold"] }]);
+  expect([...resolved]).toEqual(["europe:pstable", "europe:pabsent", "americas:pold"]);
+  expect(ids.size).toBe(4);
+});
+
+test("unpinning an identity removes its stored aliases without changing unrelated pins", () => {
+  const pins = [
+    { region: "europe", playerKey: "pold" },
+    { region: "europe", playerKey: "pstable" },
+    { region: "americas", playerKey: "pold" },
+  ];
+  expect(togglePinnedPlayer(pins, "europe", { playerKey: "pstable", playerKeyAliases: ["pold"] }))
+    .toEqual([{ region: "americas", playerKey: "pold" }]);
 });
 
 test("serializes and parses shared pins", () => {

@@ -50,6 +50,14 @@ The supplied analytics snapshot covers July 4 through October 1, 2026, with 2,05
 
 Current snapshots are stored in `public/data/<region>/v0001.json`. Rank history is stored separately in `public/data/<region>/history.v0001.json` so refreshing a leaderboard cannot discard previously collected history.
 
+Player keys are assigned by the updater and persisted in each snapshot's `player_identities` registry. The first refresh seeds this registry from the previously published snapshot, preserving existing keys and history. An unambiguous normalized name and country keep the same key when the player joins, leaves, or changes teams. The registry remembers absent players and previously observed teams across refreshes and restarts, independently of the eight-hour history interval. Cosmetic name formatting and team-tag changes also retain identity.
+
+Each row publishes `player_key` and any safe `player_key_aliases`. The browser uses these for local pins, saved views, shared links (including older compact links), and historical rank comparisons. Snapshots without these fields still use the original key calculation. Existing historical ranks and local saved data are preserved. Identity metadata is stored with the snapshot so an atomic replacement publishes both together; invalid persisted identity or history data keeps that region's existing files.
+
+The original player-key calculation and URL formats remain compatibility contracts. Tests check every current player's legacy browser key through migration, team changes, and restart; they also load existing query, path, and compact links in all regions without changing their URLs or settings, and cover version-1 settings combinations with 50 cross-region pins.
+
+The public source provides no account ID. Different names, countries, regions, blank-name transfers, and ambiguous same-name players are not automatically merged. Exact known profiles retain their keys; uncertain transfers receive separate identities to avoid mixing players' histories. Previously split identities cannot be reconstructed from history's hashes alone. Keep `player_identities` when copying or restoring snapshots; deleting it loses the remembered team transitions.
+
 The updater validates every non-empty response before replacing a region. Writes are atomic. If a request fails or returns invalid data, that region's existing snapshot and history remain unchanged. Rank snapshots are recorded at most once every eight hours and retained for 30 days. Node.js generates the sitemap from the validated regional data so country names and canonical paths use the same Unicode-safe normalization as the site build.
 
 Use Python 3.12, which matches the automation workflow:

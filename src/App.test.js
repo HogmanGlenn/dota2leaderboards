@@ -1450,3 +1450,132 @@ test("compact share links restore the personalized view", async () => {
   await userEvent.click(screen.getByRole("button", { name: "More options" }));
   expect(screen.getByRole("checkbox", { name: "Filter pinned" })).toBeChecked();
 });
+
+test.each(["verbose", "compact"])("%s links, stored pins, and rank history survive a team transfer", async (format) => {
+  const originalKey = createPlayerKey("europe", { name: "Top Carry", teamId: 10, countryCode: "FI" });
+  const transferKey = createPlayerKey("europe", { name: "Top Carry", teamId: 77, countryCode: "FI" });
+  const transferred = {
+    ...payload,
+    leaderboard: [
+      { ...payload.leaderboard[0], team_id: 77, team_tag: "NEW", player_key: originalKey, player_key_aliases: [transferKey] },
+      payload.leaderboard[1],
+    ],
+  };
+  const storedPins = JSON.stringify([
+    { region: "europe", playerKey: transferKey },
+    { region: "americas", playerKey: "pabsent" },
+  ]);
+  window.localStorage.setItem(PIN_STORAGE_KEY, storedPins);
+  window.history.replaceState({}, "", format === "verbose"
+    ? `/?p=1&h=8h&pins=europe.${transferKey}`
+    : `/?s=1e...3.e${transferKey.slice(1)}`);
+  global.fetch = jest.fn((url) => Promise.resolve({
+    ok: true,
+    json: async () => String(url).includes("history.v0001.json")
+      ? { players: [originalKey], samples: [{ t: payload.time_posted - 8 * 60 * 60, i: [0], r: [5] }] }
+      : transferred,
+  }));
+
+  const view = render(<App />);
+  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
+  expect(screen.getByText("NEW")).toBeInTheDocument();
+  expect(await screen.findByText("+4")).toBeInTheDocument();
+  expect(screen.queryByText("Mid Player")).not.toBeInTheDocument();
+  expect(window.localStorage.getItem(PIN_STORAGE_KEY)).toBe(storedPins);
+  await userEvent.click(screen.getByRole("button", { name: "More options" }));
+  await act(async () => userEvent.click(screen.getByRole("button", { name: /copy shareable link/i })));
+  const copied = navigator.clipboard.writeText.mock.calls[0][0];
+  expect(copied).toContain(originalKey);
+  expect(copied).not.toContain(transferKey);
+  expect(copied).toContain("pabsent");
+  view.unmount();
+  render(<App />);
+  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
+  expect(await screen.findByText("+4")).toBeInTheDocument();
+});
+
+test("a saved view with an alias loads after transfer without rewriting saved data", async () => {
+  const originalKey = createPlayerKey("europe", { name: "Top Carry", teamId: 10, countryCode: "FI" });
+  const saved = JSON.stringify([{
+    id: "saved-before-transfer", name: "My carries", pins: [{ region: "europe", playerKey: "poldalias" }],
+    route: { region: "europe", country: "all", pageSize: 25, historyWindow: "off", pinnedOnly: true },
+  }]);
+  window.localStorage.setItem(SAVED_SELECTIONS_KEY, saved);
+  global.fetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      ...payload,
+      leaderboard: [
+        { ...payload.leaderboard[0], team_id: 77, player_key: originalKey, player_key_aliases: ["poldalias"] },
+        payload.leaderboard[1],
+      ],
+    }),
+  });
+  render(<App />);
+  await screen.findByText("Top Carry");
+  await userEvent.click(screen.getByRole("button", { name: "More options" }));
+  await userEvent.click(screen.getByLabelText("Saved selections"));
+  await userEvent.click(screen.getByRole("option", { name: "My carries" }));
+  expect(screen.getByText("Top Carry")).toBeInTheDocument();
+  expect(screen.queryByText("Mid Player")).not.toBeInTheDocument();
+  expect(window.localStorage.getItem(SAVED_SELECTIONS_KEY)).toBe(saved);
+});
+
+test("a player pinned under an alias can be unpinned and pinned under its stable key", async () => {
+  window.localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify([{ region: "europe", playerKey: "poldalias" }]));
+  global.fetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({ ...payload, leaderboard: [
+      { ...payload.leaderboard[0], player_key: "pstable", player_key_aliases: ["poldalias"] },
+    ] }),
+  });
+  render(<App />);
+  await screen.findByText("Top Carry");
+  await userEvent.click(screen.getByText("Top Carry"));
+  expect(JSON.parse(window.localStorage.getItem(PIN_STORAGE_KEY))).toEqual([]);
+  await userEvent.click(screen.getByText("Top Carry"));
+  expect(JSON.parse(window.localStorage.getItem(PIN_STORAGE_KEY))[0].playerKey).toBe("pstable");
+});
+
+const legacyLinkCases = [
+  ["europe", "europe", "e"],
+  ["americas", "americas", "a"],
+  ["china", "china", "c"],
+  ["se_asia", "southeast-asia", "s"],
+].flatMap(([region, path, code]) => ["query", "path", "compact"].map((format) => ({ region, path, code, format })));
+
+test.each(legacyLinkCases)("keeps existing $region $format custom URLs and all their settings after transfer", async ({ region, path, code, format }) => {
+  const key = createPlayerKey(region, { name: "Top Carry", teamId: 10, countryCode: "FI" });
+  const originalUrl = format === "query"
+    ? `/?region=${region}&country=finland&limit=50&p=1&h=7d&pins=${region}.${key}`
+    : format === "path"
+      ? `/${path}/finland/?limit=50&p=1&h=7d&pins=${region}.${key}`
+      : `/?s=1${code}.fi.1e.7.${code}${key.slice(1)}`;
+  window.history.replaceState({}, "", originalUrl);
+  const transferred = {
+    ...payload,
+    leaderboard: [
+      { ...payload.leaderboard[0], team_id: 77, team_tag: "NEW", player_key: key, player_key_aliases: [] },
+      payload.leaderboard[1],
+      ...createPayload(58).leaderboard.map((player) => ({ ...player, rank: player.rank + 2 })),
+    ],
+  };
+  global.fetch = jest.fn((url) => Promise.resolve({
+    ok: true,
+    json: async () => String(url).includes("history.v0001.json")
+      ? { players: [key], samples: [{ t: payload.time_posted - 7 * 24 * 60 * 60, i: [0], r: [5] }] }
+      : transferred,
+  }));
+  render(<App />);
+  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
+  expect(await screen.findByText("+4")).toBeInTheDocument();
+  expect(screen.queryByText("Mid Player")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Filter by country")).toHaveValue("Finland");
+  expect(screen.getByLabelText("Visible rows")).toHaveTextContent("50");
+  expect(`${window.location.pathname}${window.location.search}`).toBe(originalUrl);
+  expect(fetch).toHaveBeenCalledWith(expect.stringContaining(`/data/${region}/v0001.json`), expect.any(Object));
+  await userEvent.click(screen.getByRole("button", { name: "More options" }));
+  expect(screen.getByRole("checkbox", { name: "Filter pinned" })).toBeChecked();
+  expect(screen.getByLabelText("Show rank change")).toHaveTextContent("7 days");
+  expect(window.localStorage.getItem(PIN_STORAGE_KEY)).toBeNull();
+});

@@ -35,12 +35,17 @@ export function getRankDelta(player, historyIndex, currentTimestamp, windowName)
   const sample = findHistorySample(historyIndex.samples, currentTimestamp, windowName);
   if (!sample) return { label: "—", type: "missing" };
 
-  const playerIndex = historyIndex.keyToIndex.get(player.playerKey);
-  if (playerIndex == null || !Array.isArray(sample.i) || !Array.isArray(sample.r)) {
+  if (!Array.isArray(sample.i) || !Array.isArray(sample.r)) {
     return { label: "new", type: "new" };
   }
 
-  const samplePosition = sample.i.indexOf(playerIndex);
+  let samplePosition = -1;
+  for (const key of [player.playerKey, ...(player.playerKeyAliases || [])]) {
+    const playerIndex = historyIndex.keyToIndex.get(key);
+    if (playerIndex == null) continue;
+    samplePosition = sample.i.indexOf(playerIndex);
+    if (samplePosition >= 0) break;
+  }
   if (samplePosition < 0) return { label: "new", type: "new" };
 
   const previousRank = Number(sample.r[samplePosition]);

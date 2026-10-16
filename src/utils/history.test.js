@@ -37,3 +37,18 @@ test("uses the nearest sample at or before the requested history window", () => 
   expect(findHistorySample(samples, 3_500 + 8 * 60 * 60, "8h")).toEqual({ t: 3_000 });
   expect(findHistorySample(samples, 900 + 8 * 60 * 60, "8h")).toBeNull();
 });
+
+test("reads existing samples through aliases without rewriting or preferring them over the stable key", () => {
+  const data = {
+    players: ["pstable", "pold"],
+    samples: [
+      { t: 1_000, i: [1], r: [20] },
+      { t: 2_000, i: [0, 1], r: [12, 99] },
+    ],
+  };
+  const history = createHistoryIndex(data);
+  const player = { playerKey: "pstable", playerKeyAliases: ["pold"], rank: 10 };
+  expect(getRankDelta(player, history, 1_000 + 8 * 60 * 60, "8h")).toEqual({ label: "+10", type: "up" });
+  expect(getRankDelta(player, history, 2_000 + 8 * 60 * 60, "8h")).toEqual({ label: "+2", type: "up" });
+  expect(data.samples[0]).toEqual({ t: 1_000, i: [1], r: [20] });
+});

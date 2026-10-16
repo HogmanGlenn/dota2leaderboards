@@ -7,6 +7,16 @@ from unittest import mock
 import update_leaderboards as updater
 
 
+def without_identities(payload):
+    return {
+        **{key: value for key, value in payload.items() if key != "player_identities"},
+        "leaderboard": [
+            {key: value for key, value in player.items() if key not in ("player_key", "player_key_aliases")}
+            for player in payload["leaderboard"]
+        ],
+    }
+
+
 class LeaderboardUpdaterTests(unittest.TestCase):
     def test_validates_expected_payload(self):
         payload = {
@@ -98,7 +108,7 @@ class LeaderboardUpdaterTests(unittest.TestCase):
             self.assertEqual(result.kept, ("europe",))
             self.assertIn("empty response", result.failures["europe"])
             self.assertEqual(europe, existing_payload)
-            self.assertEqual(americas, {**new_payload, "fetched_at": 1_900_000_000})
+            self.assertEqual(without_identities(americas), {**new_payload, "fetched_at": 1_900_000_000})
 
     def test_update_once_refreshes_timestamp_when_payload_is_unchanged(self):
         api_payload = {
@@ -119,7 +129,7 @@ class LeaderboardUpdaterTests(unittest.TestCase):
             written = json.loads(
                 (output_dir / "europe" / "v0001.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(written, {**api_payload, "fetched_at": 1_900_000_000})
+            self.assertEqual(without_identities(written), {**api_payload, "fetched_at": 1_900_000_000})
 
     def test_update_once_writes_canonical_sitemap_with_verifiable_lastmod(self):
         payloads = {
@@ -203,7 +213,7 @@ class LeaderboardUpdaterTests(unittest.TestCase):
                 (output_dir / "europe" / "history.v0001.json").read_text(encoding="utf-8")
             )
 
-            self.assertEqual(current, {**api_payload, "fetched_at": 1_900_000_000})
+            self.assertEqual(without_identities(current), {**api_payload, "fetched_at": 1_900_000_000})
             self.assertEqual(history["interval_hours"], 8)
             self.assertEqual(history["samples"][0]["t"], 1_900_000_000)
             self.assertEqual(history["samples"][0]["r"], [1])

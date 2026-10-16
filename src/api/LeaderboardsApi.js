@@ -25,7 +25,7 @@ export async function getLeaderboardData(region = "europe", options = {}) {
       const name = entry.name || "Anonymous player";
       const teamTag = entry.team_tag || "";
 
-      return new Player(
+      const player = new Player(
         countryCode,
         name,
         Number(entry.rank),
@@ -33,8 +33,14 @@ export async function getLeaderboardData(region = "europe", options = {}) {
         teamTag,
         getCountrySlug(countryCode),
         `${name} ${teamTag}`.toLocaleLowerCase(),
-        createPlayerKey(region, { name, teamId: entry.team_id, countryCode })
+        /^p[a-z0-9]+$/.test(entry.player_key || "")
+          ? entry.player_key
+          : createPlayerKey(region, { name, teamId: entry.team_id, countryCode })
       );
+      player.playerKeyAliases = Array.isArray(entry.player_key_aliases)
+        ? entry.player_key_aliases.filter((key) => /^p[a-z0-9]+$/.test(key))
+        : [];
+      return player;
     })
     .filter((player) => Number.isFinite(player.rank))
     .sort((a, b) => a.rank - b.rank);

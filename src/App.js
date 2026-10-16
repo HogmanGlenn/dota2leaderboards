@@ -22,6 +22,7 @@ import {
   parseSharedPins,
   pinnedPlayerId,
   readPinnedPlayers,
+  resolvePinnedPlayerIds,
   serializeSharedPins,
   togglePinnedPlayer,
   writePinnedPlayers,
@@ -316,8 +317,10 @@ function Dashboard() {
     [pinnedPlayers]
   );
   const activePinnedIds = React.useMemo(
-    () => new Set([...localPinnedIds, ...sharedPinnedIds]),
-    [localPinnedIds, sharedPinnedIds]
+    () => resolvePinnedPlayerIds(
+      new Set([...localPinnedIds, ...sharedPinnedIds]), currentDataRegion, currentPlayers
+    ),
+    [currentDataRegion, currentPlayers, localPinnedIds, sharedPinnedIds]
   );
 
   const pinnedFilterIds = route.pinnedOnly ? activePinnedIds : null;
@@ -430,18 +433,14 @@ function Dashboard() {
     }
   };
   const currentSharePins = React.useMemo(() => {
-    const sharedPinEntries = Array.from(sharedPinnedIds, (id) => {
+    return Array.from(activePinnedIds, (id) => {
       const separator = id.indexOf(":");
       return {
         region: id.slice(0, separator),
         playerKey: id.slice(separator + 1),
       };
     });
-    const pinsById = new Map(
-      [...pinnedPlayers, ...sharedPinEntries].map((pin) => [pinnedPlayerId(pin.region, pin.playerKey), pin])
-    );
-    return Array.from(pinsById.values());
-  }, [pinnedPlayers, sharedPinnedIds]);
+  }, [activePinnedIds]);
   const saveSelection = () => {
     const selection = createSavedSelection(selectionName, route, currentSharePins);
     if (!selection) {
