@@ -24,21 +24,32 @@ class PlayerIdentityTests(unittest.TestCase):
         regions = []
         for region in updater.REGIONS:
             original = json.loads(updater.payload_path(root / "public/data", region).read_text(encoding="utf-8"))
-            migrated = identity.assign_player_identities(region, original, original)
-            counts = Counter(identity.profile(player)[:2] for player in original["leaderboard"])
-            players = [
-                {**player, "team_id": 2_000_000_000 + index, "team_tag": "Transfer"}
-                if identity.profile(player)[0] and counts[identity.profile(player)[:2]] == 1
-                else player
-                for index, player in enumerate(original["leaderboard"])
-            ]
-            transferred = identity.assign_player_identities(region, payload(*players), migrated)
-            restarted = identity.assign_player_identities(region, payload(*players), transferred)
-            regions.append({
-                "region": region,
-                "original": original["leaderboard"],
-                "snapshots": [snapshot["leaderboard"] for snapshot in (migrated, transferred, restarted)],
-            })
+            legacy = payload(*[
+                {key: value for key, value in player.items() if key not in ("player_key", "player_key_aliases")}
+                for player in original["leaderboard"]
+            ])
+            for previous in (legacy, original):
+                migrated = identity.assign_player_identities(region, previous, previous)
+                counts = Counter(identity.profile(player)[:2] for player in previous["leaderboard"])
+                known_counts = Counter(
+                    (record["name"], record["country"])
+                    for record in migrated["player_identities"]["players"].values()
+                )
+                players = [
+                    {**player, "team_id": 2_000_000_000 + index, "team_tag": "Transfer"}
+                    if identity.profile(player)[0]
+                    and counts[identity.profile(player)[:2]] == 1
+                    and known_counts[identity.profile(player)[:2]] == 1
+                    else player
+                    for index, player in enumerate(previous["leaderboard"])
+                ]
+                transferred = identity.assign_player_identities(region, payload(*players), migrated)
+                restarted = identity.assign_player_identities(region, payload(*players), transferred)
+                regions.append({
+                    "region": region,
+                    "original": previous["leaderboard"],
+                    "snapshots": [snapshot["leaderboard"] for snapshot in (migrated, transferred, restarted)],
+                })
         result = subprocess.run(
             ["node", str(root / "scripts/check_player_link_compatibility.js")],
             input=json.dumps(regions), capture_output=True, text=True, encoding="utf-8",
@@ -119,6 +130,19 @@ class PlayerIdentityTests(unittest.TestCase):
         self.assertEqual(result["leaderboard"][0]["player_key_aliases"], [])
         again = identity.assign_player_identities("europe", payload(PLAYER, {**PLAYER, "team_id": 77, "rank": 60}), result)
         self.assertEqual([player["player_key"] for player in again["leaderboard"]], [first_key, current_key])
+
+    def test_unique_current_name_with_ambiguous_history_does_not_borrow_identity(self):
+        other = {**PLAYER, "rank": 60, "team_id": 99}
+        previous = identity.assign_player_identities("europe", payload(PLAYER, other))
+        remaining = identity.assign_player_identities("europe", payload(PLAYER), previous)
+        self.assertEqual(remaining["leaderboard"][0]["player_key"], previous["leaderboard"][0]["player_key"])
+        transferred = {**PLAYER, "team_id": 77}
+        result = identity.assign_player_identities("europe", payload(transferred), remaining)
+        old_keys = {player["player_key"] for player in previous["leaderboard"]}
+        current = result["leaderboard"][0]
+        self.assertNotIn(current["player_key"], old_keys)
+        self.assertTrue(old_keys.isdisjoint(current["player_key_aliases"]))
+        self.assertEqual(identity.assign_player_identities("europe", payload(transferred), result), result)
 
     def test_anonymous_transfers_are_not_matched_by_an_empty_name(self):
         blank = {**PLAYER, "name": ""}

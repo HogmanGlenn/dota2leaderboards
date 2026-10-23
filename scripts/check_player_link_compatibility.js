@@ -13,13 +13,18 @@ async function main() {
   for (const { region, original, snapshots } of regions) {
     const expected = new Map();
     original.forEach((player, index) => {
-      const key = createPlayerKey(region, {
+      const legacyKey = createPlayerKey(region, {
         name: player.name || "Anonymous player",
         teamId: player.team_id,
         countryCode: player.country,
       });
-      if (!expected.has(key)) expected.set(key, new Set());
-      expected.get(key).add(index);
+      const keys = player.player_key
+        ? [player.player_key, ...(player.player_key_aliases || [])]
+        : [legacyKey];
+      for (const key of keys) {
+        if (!expected.has(key)) expected.set(key, new Set());
+        expected.get(key).add(index);
+      }
     });
 
     for (const players of snapshots) {
@@ -36,7 +41,7 @@ async function main() {
       }
     }
   }
-  console.log(`Verified ${linksChecked} legacy player-link lookups through migration and transfers.`);
+  console.log(`Verified ${linksChecked} legacy and published player-link lookups through migration and transfers.`);
 }
 
 main().catch((error) => {
