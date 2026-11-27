@@ -43,9 +43,11 @@ test("direct crawlable pages show the same 25 rows and keep normal pagination, s
   expect(document.querySelectorAll("[data-player-row]")).toHaveLength(25);
   expect(screen.getByRole("button", { name: "Next page" })).toHaveAttribute("href", "/europe/page/3/");
   expect(screen.getByRole("button", { name: "Previous page" })).toHaveAttribute("href", "/europe/");
+  const pushState = jest.spyOn(window.history, "pushState");
   await userEvent.click(screen.getByRole("button", { name: "Next page" }));
   expect(await screen.findByText("Player 51")).toBeInTheDocument();
   expect(window.location.pathname).toBe("/europe/page/3/");
+  expect(pushState).not.toHaveBeenCalled();
   expect(fetch).toHaveBeenCalledTimes(1);
   await act(async () => {
     window.history.replaceState({}, "", "/europe/page/2/");

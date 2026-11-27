@@ -604,7 +604,7 @@ function Dashboard() {
         />
         <Leaderboard
           initialPage={(route.page || 1) - 1}
-          onPageNavigate={(page) => updateRoute({ page: page + 1 })}
+          onPageNavigate={(page) => updateRoute({ page: page + 1 }, true)}
           pageHref={(page) => createLeaderboardUrl({ ...route, page: page + 1 })}
           onVisiblePlayersChange={setVisiblePage}
           players={filteredPlayers}
