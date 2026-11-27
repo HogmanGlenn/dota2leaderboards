@@ -2,7 +2,7 @@ import React from "react";
 import ClearIcon from "@mui/icons-material/Clear";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import Autocomplete from "@mui/material/Autocomplete";
+import Autocomplete, { createFilterOptions } from "@mui/material/Autocomplete";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
@@ -22,6 +22,8 @@ const HISTORY_OPTION_LABELS = {
   "7d": "7 days",
   "30d": "30 days",
 };
+
+const filterCountries = createFilterOptions({ matchFrom: "start", trim: true });
 
 export default function Navigation({
   regionPaths = {},
@@ -112,6 +114,7 @@ export default function Navigation({
           inputValue={countryInput}
           value={countryValue}
           options={countries}
+          filterOptions={filterCountries}
           onChange={(_, value) => onCountryChange(value)}
           onInputChange={(_, value, reason) => {
             if (reason !== "reset") setCountryInput(value);

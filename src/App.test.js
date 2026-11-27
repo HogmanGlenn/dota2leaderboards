@@ -297,6 +297,32 @@ test("clears the search field", async () => {
   expect(screen.getByText("Top Carry")).toBeInTheDocument();
 });
 
+test("country search matches the start of names, ignoring case and accents", async () => {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ ...payload, leaderboard: ["fi", "fr", "af", "za", "ax"].map((country, index) => ({
+      rank: index + 1, name: `Country Player ${index}`, country,
+    })) }),
+  });
+  render(<App />);
+  await screen.findByText("Country Player 0");
+  const input = screen.getByLabelText("Filter by country");
+  await userEvent.type(input, "F");
+  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["Finland", "France"]);
+  await userEvent.clear(input);
+  await userEvent.type(input, "f");
+  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["Finland", "France"]);
+  await userEvent.clear(input);
+  await userEvent.type(input, "aland");
+  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["Åland Islands"]);
+  await userEvent.clear(input);
+  await userEvent.type(input, " fi ");
+  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["Finland"]);
+  await userEvent.keyboard("{ArrowDown}{Enter}");
+  expect(input).toHaveValue("Finland");
+  expect(window.location.pathname).toBe("/europe/finland/");
+});
+
 test("clears typed country search text before a country is selected", async () => {
   render(<App />);
   await screen.findByText("Top Carry");
