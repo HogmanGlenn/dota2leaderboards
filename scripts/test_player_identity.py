@@ -56,6 +56,37 @@ class PlayerIdentityTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_empty_and_whitespace_names_keep_separate_legacy_links(self):
+        for names in (("", " ", "  "), (" ", "  ", "")):
+            with self.subTest(names=names):
+                original = payload(*[{"rank": index + 1, "name": name} for index, name in enumerate(names)])
+                migrated = identity.assign_player_identities("china", original, original)
+                restarted = identity.assign_player_identities("china", original, migrated)
+                result = subprocess.run(
+                    ["node", str(Path(__file__).with_name("check_player_link_compatibility.js"))],
+                    input=json.dumps([{
+                        "region": "china", "original": original["leaderboard"],
+                        "snapshots": [migrated["leaderboard"], restarted["leaderboard"]],
+                    }]), capture_output=True, text=True, encoding="utf-8",
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(migrated, restarted)
+
+    def test_previously_published_blank_name_group_keeps_its_keys_and_aliases(self):
+        key = identity.create_player_key("china", {"name": ""})
+        alias = identity.create_player_key("china", {"name": "Anonymous player"})
+        previous = {
+            "leaderboard": [
+                {"rank": index + 1, "name": name, "player_key": key, "player_key_aliases": [alias]}
+                for index, name in enumerate(("", " ", "  "))
+            ],
+            "player_identities": {"version": 1, "players": {
+                key: {"name": "", "country": "", "teams": [None]},
+            }},
+        }
+        refreshed = identity.assign_player_identities("china", payload(*previous["leaderboard"]), previous)
+        self.assertEqual(refreshed, previous)
+
     def test_transfer_keeps_original_key_and_history_across_restarts(self):
         original_key = identity.create_player_key("europe", PLAYER)
         with tempfile.TemporaryDirectory() as directory:
@@ -147,7 +178,11 @@ class PlayerIdentityTests(unittest.TestCase):
     def test_anonymous_transfers_are_not_matched_by_an_empty_name(self):
         blank = {**PLAYER, "name": ""}
         previous = identity.assign_player_identities("europe", payload(blank))
-        self.assertIn(identity.create_player_key("europe", {**blank, "name": "Anonymous player"}), previous["leaderboard"][0]["player_key_aliases"])
+        published = previous["leaderboard"][0]
+        self.assertIn(
+            identity.create_player_key("europe", {**blank, "name": "Anonymous player"}),
+            [published["player_key"], *published["player_key_aliases"]],
+        )
         result = identity.assign_player_identities("europe", payload({**blank, "team_id": 77}), previous)
         self.assertNotEqual(result["leaderboard"][0]["player_key"], previous["leaderboard"][0]["player_key"])
 

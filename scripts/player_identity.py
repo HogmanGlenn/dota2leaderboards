@@ -47,11 +47,12 @@ def create_player_key(region: str, player: dict[str, Any]) -> str:
     return hash_base36("|".join(parts))
 
 
-def profile(player: dict[str, Any]) -> tuple[str, str, int | None]:
+def profile(player: dict[str, Any]) -> tuple[str, str, int | None, bool]:
     return (
         normalize_player_name(player["name"]),
         (player.get("country") or "").lower(),
         player.get("team_id"),
+        player["name"] == "",
     )
 
 
@@ -73,6 +74,9 @@ def read_identities(previous: dict[str, Any]) -> dict[str, dict[str, Any]]:
             or not isinstance(record.get("teams"), list)
             or not record["teams"]
             or any(team is not None and type(team) is not int for team in record["teams"])
+            or ("empty_name" in record and (
+                type(record["empty_name"]) is not bool or record["name"] != ""
+            ))
         ):
             raise ValueError("invalid player identity record")
     return deepcopy(players)
@@ -81,7 +85,7 @@ def read_identities(previous: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def legacy_keys(region: str, record: dict[str, Any]) -> set[str]:
     names = [record["name"]]
     # Older browsers hashed the display label for truly empty names.
-    if record["name"] == "":
+    if record["name"] == "" and record.get("empty_name") is not False:
         names.append("Anonymous player")
     return {
         create_player_key(region, {"name": name, "country": record["country"], "team_id": team})
@@ -99,16 +103,21 @@ def assign_player_identities(
     for record in records.values():
         occupied.update(legacy_keys(region, record))
 
-    def add_identity(signature: tuple[str, str, int | None]) -> str:
-        name, country, team = signature
-        key = create_player_key(region, {"name": name, "country": country, "team_id": team})
+    def add_identity(signature: tuple[str, str, int | None, bool]) -> str:
+        name, country, team, empty_name = signature
+        key = create_player_key(region, {
+            "name": "Anonymous player" if empty_name else name,
+            "country": country, "team_id": team,
+        })
         salt = 0
         while key in occupied:
             salt += 1
             key = hash_base36(f"{region}|{name}|{country}|{team}|identity:{salt}")
         records[key] = {"name": name, "country": country, "teams": [team]}
+        if not name:
+            records[key]["empty_name"] = empty_name
+        # Reserve existing aliases above; resolve aliases of new records below.
         occupied.add(key)
-        occupied.update(legacy_keys(region, records[key]))
         return key
 
     # Seed from the last published snapshot, before looking at the new teams.
@@ -123,26 +132,33 @@ def assign_player_identities(
             if not isinstance(key, str):
                 raise ValueError("published player has no valid identity key")
             record = records.get(key)
-            name, country, team = profile(player)
+            name, country, team, empty_name = profile(player)
             if (
                 not record
                 or (name, country) != (record["name"], record["country"])
                 or team not in record["teams"]
+                or ("empty_name" in record and record["empty_name"] != empty_name)
             ):
                 raise ValueError("published player does not match the identity registry")
 
-    by_profile: dict[tuple[str, str, int | None], list[str]] = defaultdict(list)
+    by_profile: dict[tuple[str, str, int | None, bool], list[str]] = defaultdict(list)
     by_name_country: dict[tuple[str, str], list[str]] = defaultdict(list)
     for key, record in records.items():
         name_country = (record["name"], record["country"])
         by_name_country[name_country].append(key)
+        # Older registries grouped empty and whitespace-only names together.
+        name_kinds = (
+            (False, True) if not record["name"] and "empty_name" not in record
+            else (record.get("empty_name", False),)
+        )
         for team in record["teams"]:
-            by_profile[(*name_country, team)].append(key)
+            for empty_name in name_kinds:
+                by_profile[(*name_country, team, empty_name)].append(key)
 
     signatures = dict.fromkeys(profile(player) for player in payload["leaderboard"])
     current_name_counts: dict[tuple[str, str], int] = defaultdict(int)
     for player in payload["leaderboard"]:
-        name, country, _ = profile(player)
+        name, country, _, _ = profile(player)
         current_name_counts[(name, country)] += 1
 
     previous_keys = {
@@ -150,17 +166,18 @@ def assign_player_identities(
         for player in previous.get("leaderboard", [])
         if "player_key" in player
     }
-    exact_matches: dict[str, list[tuple[str, str, int | None]]] = defaultdict(list)
+    exact_matches: dict[str, list[tuple[str, str, int | None, bool]]] = defaultdict(list)
     for signature in signatures:
         candidates = by_profile[signature]
         key = previous_keys.get(signature)
         if key or len(candidates) == 1:
             exact_matches[key or candidates[0]].append(signature)
 
-    assigned: dict[tuple[str, str, int | None], str] = {}
+    assigned: dict[tuple[str, str, int | None, bool], str] = {}
     for key, matches in exact_matches.items():
-        if len(matches) == 1:
-            assigned[matches[0]] = key
+        if len(matches) == 1 or not records[key]["name"]:
+            for signature in matches:
+                assigned[signature] = key
         else:
             # Two accounts can adopt profiles this identity used at different
             # times. Only the last published profile may keep its key.
@@ -172,7 +189,7 @@ def assign_player_identities(
     for signature in signatures:
         if signature in assigned:
             continue
-        name, country, team = signature
+        name, country, team, _ = signature
         candidates = by_name_country[(name, country)]
         if name and len(candidates) == 1 and current_name_counts[(name, country)] == 1:
             key = candidates[0]
