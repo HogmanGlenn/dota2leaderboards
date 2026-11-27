@@ -343,7 +343,7 @@ function replaceSeoBody(html, page, pages) {
   if (!rootPattern.test(html)) {
     throw new Error("Empty root container is missing from index.html");
   }
-  return html.replace(rootPattern, `<div id="root">\n${createSeoBody(page, pages)}\n</div>`);
+  return html.replace(rootPattern, () => `<div id="root">\n${createSeoBody(page, pages)}\n</div>`);
 }
 
 function createSitemap(pages) {

@@ -77,6 +77,12 @@ const baseHtml = '<html><body><div id="root"></div></body></html>';
 const renderedHtml = replaceSeoBody(baseHtml, europePage, pages);
 assert.doesNotMatch(renderedHtml, /<div id="root"><\/div>/);
 assert.match(renderedHtml, /<table class="seo-fallback__table">/);
+const replacementTokenName = "Player $$ $& $` $'";
+const tokenPage = { ...europePage, players: [player(1, replacementTokenName)], start: 0, pageCount: 1 };
+assert.ok(
+  replaceSeoBody(baseHtml, tokenPage, pages).includes("Player $$ $&amp; $` $'"),
+  "Player names must be inserted literally, including JavaScript replacement-string tokens"
+);
 assert.throws(
   () => replaceSeoBody("<html></html>", europePage, pages),
   /Empty root container/
