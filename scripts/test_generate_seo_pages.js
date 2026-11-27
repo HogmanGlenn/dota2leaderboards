@@ -62,9 +62,16 @@ assert.match(europeBody, /<h1>Europe Dota 2 Leaderboard<\/h1>/);
 assert.match(europeBody, /href="\/europe\/finland\/">Finland<\/a>/);
 assert.match(europeBody, /First &amp; &lt;Best&gt;/);
 assert.doesNotMatch(europeBody, /&lt;script&gt;last/);
-assert.match(europeBody, /Showing the top 100 of 102 ranked players/);
+assert.match(europeBody, /Showing players 1–25 of 102 ranked players/);
 assert.match(finlandBody, /<th scope="col">Country rank<\/th>/);
 assert.match(finlandBody, /<a href="\/europe\/">Europe<\/a>/);
+assert.match(europeBody, /href="\/europe\/page\/2\/">Next page/);
+const finalSwedenPage = pages.find(({ pathname }) => pathname === "/europe/sweden/page/5/");
+assert.ok(finalSwedenPage);
+assert.match(createSeoBody(finalSwedenPage, pages), /&lt;script&gt;last&lt;\/script&gt;/);
+assert.match(createSeoBody(finalSwedenPage, pages), /<td>101<\/td>/);
+assert.match(createSeoBody(finalSwedenPage, pages), /href="\/europe\/sweden\/page\/4\/">Previous page/);
+assert.doesNotMatch(createSeoBody(finalSwedenPage, pages), />Next page/);
 
 const baseHtml = '<html><body><div id="root"></div></body></html>';
 const renderedHtml = replaceSeoBody(baseHtml, europePage, pages);
@@ -107,6 +114,7 @@ try {
     fs.mkdirSync(path.join(dataDir, region.key), { recursive: true });
     fs.writeFileSync(path.join(dataDir, region.key, "v0001.json"), JSON.stringify({
       fetched_at: 1785217552,
+      player_identities: { version: 1, players: { privateUpdaterRecord: {} } },
       leaderboard: Array.from(region.countries.values()).flat(),
     }));
   });
@@ -118,6 +126,29 @@ try {
 
   const sitemapPath = path.join(buildDir, "sitemap.xml");
   validateSeoPages(buildDir, pages, sitemapPath);
+  regions.forEach((region) => {
+    const original = JSON.parse(fs.readFileSync(path.join(dataDir, region.key, "v0001.json"), "utf8"));
+    const published = JSON.parse(fs.readFileSync(path.join(buildDir, "data", region.key, "v0001.json"), "utf8"));
+    assert.ok(original.player_identities, "Build must retain the updater registry in source data");
+    assert.ok(!Object.hasOwn(published, "player_identities"));
+    assert.deepEqual(published.leaderboard, original.leaderboard, "Build must preserve every row, identity key, alias, and Ctrl+F input");
+    assert.equal(published.fetched_at, original.fetched_at);
+  });
+  const visited = new Set();
+  const queue = ["/"];
+  while (queue.length) {
+    const pathname = queue.pop();
+    if (visited.has(pathname)) continue;
+    visited.add(pathname);
+    const html = fs.readFileSync(path.join(buildDir, ...pathname.split("/").filter(Boolean), "index.html"), "utf8");
+    for (const [, href] of html.matchAll(/<a\b[^>]*href="(\/[^"?#]*\/)"/g)) queue.push(href);
+  }
+  assert.equal(visited.size, pages.length, "Every generated page must be reachable through real links");
+  const lastPageHtml = fs.readFileSync(path.join(buildDir, "europe", "sweden", "page", "5", "index.html"), "utf8");
+  assert.match(lastPageHtml, /Page 5<\/title>/);
+  assert.doesNotMatch(lastPageHtml, /<script>last<\/script>/);
+  const availability = JSON.parse(lastPageHtml.match(/id="leaderboard-availability" type="application\/json">([^<]+)<\/script>/)[1]);
+  assert.deepEqual(availability.americas, ["united_states"]);
   const finlandPath = path.join(buildDir, "europe", "finland", "index.html");
   const countryHtml = fs.readFileSync(finlandPath, "utf8");
   assert.match(countryHtml, /href="https:\/\/dota2leaderboards\.com\/europe\/finland\/"/);

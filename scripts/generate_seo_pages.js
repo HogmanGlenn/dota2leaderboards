@@ -4,7 +4,8 @@ const path = require("path");
 const SITE_NAME = "Dota 2 Leaderboards";
 const HOME_TITLE = "Dota 2 Leaderboard | Regional Rankings";
 const SITE_URL = "https://dota2leaderboards.com";
-const STATIC_ROW_LIMIT = 100;
+const STATIC_ROW_LIMIT = 25;
+const { createStructuredData: structuredDataForPage } = require("../src/utils/seoStructuredData");
 const REGIONS = [
   { key: "europe", name: "Europe", path: "europe" },
   { key: "americas", name: "Americas", path: "americas" },
@@ -97,9 +98,11 @@ function readRegionData(dataDir, region) {
 }
 
 function pageMetadata(region, country = null, pathname = "/") {
+  const pageNumber = Number(pathname.match(/\/page\/(\d+)\/$/)?.[1]) || 1;
+  const suffix = pageNumber > 1 ? ` — Page ${pageNumber}` : "";
   if (country) {
     return {
-      title: `Dota 2 Leaderboard | ${country.name}, ${region.name}`,
+      title: `Dota 2 Leaderboard | ${country.name}, ${region.name}${suffix}`,
       description: `Current ${country.name} Dota 2 leaderboard for ${region.name}, with player ranks, team tags, and country positions.`,
       url: `${SITE_URL}${pathname}`,
     };
@@ -107,7 +110,7 @@ function pageMetadata(region, country = null, pathname = "/") {
 
   if (pathname !== "/") {
     return {
-      title: `Dota 2 Leaderboard | ${region.name}`,
+      title: `Dota 2 Leaderboard | ${region.name}${suffix}`,
       description: `Current Dota 2 leaderboard for ${region.name}, with player rankings, team tags, countries, and rank changes.`,
       url: `${SITE_URL}${pathname}`,
     };
@@ -163,52 +166,32 @@ function createPages(regionData) {
       });
   });
 
-  const paths = new Set();
+  const paginated = [];
   pages.forEach((page) => {
+    const pageCount = Math.ceil(page.players.length / STATIC_ROW_LIMIT);
+    const basePath = page.type === "home" ? `/${page.region.path}/` : page.pathname;
+    const count = page.type === "home" ? 1 : pageCount;
+    for (let pageNumber = 1; pageNumber <= count; pageNumber += 1) {
+      paginated.push({
+        ...page, basePath, pageNumber, pageCount,
+        start: (pageNumber - 1) * STATIC_ROW_LIMIT,
+        pathname: pageNumber === 1 ? page.pathname : `${basePath}page/${pageNumber}/`,
+      });
+    }
+  });
+  const paths = new Set();
+  paginated.forEach((page) => {
     if (paths.has(page.pathname)) throw new Error(`Duplicate SEO path: ${page.pathname}`);
     paths.add(page.pathname);
   });
-  return pages;
+  return paginated;
 }
 
 function createStructuredData(page, metadata) {
-  const itemList = {
-    "@type": "ItemList",
-    numberOfItems: page.players.length,
-    itemListElement: page.players.slice(0, 25).map((player, index) => ({
-      "@type": "ListItem",
-      position: index + 1,
-      name: player.name || "Anonymous player",
-    })),
-  };
-  const pageEntity = {
-    "@type": page.type === "home" ? "WebApplication" : "CollectionPage",
-    "@id": `${metadata.url}#page`,
-    name: metadata.title,
-    url: metadata.url,
-    description: metadata.description,
-    isPartOf: { "@id": `${SITE_URL}/#website` },
-    mainEntity: itemList,
-  };
-
-  if (page.lastModified) pageEntity.dateModified = page.lastModified;
-  if (page.type === "home") {
-    pageEntity.applicationCategory = "GameApplication";
-    pageEntity.operatingSystem = "Any";
-  }
-
-  return {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "WebSite",
-        "@id": `${SITE_URL}/#website`,
-        name: SITE_NAME,
-        url: `${SITE_URL}/`,
-      },
-      pageEntity,
-    ],
-  };
+  return structuredDataForPage({
+    type: page.type, metadata, lastModified: page.lastModified,
+    players: page.players.slice(page.start, page.start + STATIC_ROW_LIMIT),
+  });
 }
 
 function createSeoHead(page) {
@@ -239,7 +222,7 @@ function formatUpdatedAt(value) {
 
 function createRegionLinks(page, pages) {
   return pages
-    .filter(({ type }) => type === "region")
+    .filter(({ type, pageNumber }) => type === "region" && pageNumber === 1)
     .map((regionPage) => {
       const current = page.type !== "home" && page.region.key === regionPage.region.key
         ? ' aria-current="page"'
@@ -253,7 +236,7 @@ function createCountryLinks(page, pages) {
   if (page.type !== "region") return "";
 
   const links = pages
-    .filter(({ type, region }) => type === "country" && region.key === page.region.key)
+    .filter(({ type, region, pageNumber }) => type === "country" && pageNumber === 1 && region.key === page.region.key)
     .map((countryPage) => `        <a href="${htmlEscape(countryPage.pathname)}">${htmlEscape(countryPage.country.name)}</a>`)
     .join("\n");
 
@@ -265,13 +248,13 @@ function createCountryLinks(page, pages) {
 }
 
 function createLeaderboardRows(page) {
-  return page.players.slice(0, STATIC_ROW_LIMIT).map((player, index) => {
+  return page.players.slice(page.start, page.start + STATIC_ROW_LIMIT).map((player, index) => {
     const code = typeof player.country === "string" ? player.country.toUpperCase() : "";
     const country = /^[A-Z]{2}$/.test(code)
       ? `<a href="/${htmlEscape(page.region.path)}/${htmlEscape(countryPath(code))}/">${htmlEscape(countryName(code))}</a>`
       : "—";
     const countryRank = page.type === "country"
-      ? `          <td>${index + 1}</td>\n`
+      ? `          <td>${page.start + index + 1}</td>\n`
       : "";
 
     return [
@@ -294,7 +277,8 @@ function createSeoBody(page, pages) {
       ? `${page.region.name} Dota 2 Leaderboard`
       : SITE_NAME;
   const updatedAt = formatUpdatedAt(page.lastModified);
-  const rowCount = Math.min(page.players.length, STATIC_ROW_LIMIT);
+  const rowCount = Math.min(page.players.length - page.start, STATIC_ROW_LIMIT);
+  const range = `${(page.start + 1).toLocaleString("en-US")}–${(page.start + rowCount).toLocaleString("en-US")}`;
   const countryRankHeader = page.type === "country"
     ? "            <th scope=\"col\">Country rank</th>\n"
     : "";
@@ -314,11 +298,11 @@ function createSeoBody(page, pages) {
     "      </nav>",
     parentLink,
     `      <h1>${htmlEscape(heading)}</h1>`,
-    `      <p class="seo-fallback__summary">${htmlEscape(metadata.description)} Showing the top ${rowCount.toLocaleString("en-US")} of ${page.players.length.toLocaleString("en-US")} ranked players.${updatedAt ? ` Updated <time datetime="${htmlEscape(page.lastModified)}">${htmlEscape(updatedAt)}</time>.` : ""}</p>`,
+    `      <p class="seo-fallback__summary">${htmlEscape(metadata.description)} Showing players ${range} of ${page.players.length.toLocaleString("en-US")} ranked players.${updatedAt ? ` Updated <time datetime="${htmlEscape(page.lastModified)}">${htmlEscape(updatedAt)}</time>.` : ""}</p>`,
     countryLinks,
     '      <div class="seo-fallback__table-wrap">',
     '        <table class="seo-fallback__table">',
-    `          <caption>Top ${rowCount.toLocaleString("en-US")} ${htmlEscape(page.country?.name || page.region.name)} players</caption>`,
+    `          <caption>${htmlEscape(page.country?.name || page.region.name)} players ${range}</caption>`,
     "          <thead>",
     "          <tr>",
     countryRankHeader.trimEnd(),
@@ -333,6 +317,12 @@ function createSeoBody(page, pages) {
     "          </tbody>",
     "        </table>",
     "      </div>",
+    page.pageCount > 1 ? [
+      '      <nav aria-label="Pagination">',
+      page.pageNumber > 1 ? `        <a href="${page.pageNumber === 2 ? page.basePath : `${page.basePath}page/${page.pageNumber - 1}/`}">Previous page</a>` : "",
+      page.pageNumber < page.pageCount ? `        <a href="${page.basePath}page/${page.pageNumber + 1}/">Next page</a>` : "",
+      "      </nav>",
+    ].filter(Boolean).join("\n") : "",
     "    </main>",
     "  </div>",
   ].filter(Boolean).join("\n");
@@ -376,7 +366,10 @@ function createSitemap(pages) {
 function writeSeoPages(buildDir, pages) {
   const indexPath = path.join(buildDir, "index.html");
   if (!fs.existsSync(indexPath)) throw new Error(`${indexPath} does not exist`);
-  const baseHtml = fs.readFileSync(indexPath, "utf8");
+  const availability = Object.fromEntries(pages.filter((page) => page.type === "region" && page.pageNumber === 1)
+    .map((page) => [page.region.key, [...page.region.countries.keys()].map(countrySlug)]));
+  const baseHtml = fs.readFileSync(indexPath, "utf8").replace("</head>",
+    `<script id="leaderboard-availability" type="application/json">${JSON.stringify(availability)}</script></head>`);
 
   pages.forEach((page) => {
     const outputPath = page.pathname === "/"
@@ -421,6 +414,16 @@ function validateSeoPages(buildDir, pages, sitemapPath) {
   });
 }
 
+function writeBrowserData(buildDir, dataDir, regionData) {
+  regionData.forEach((region) => {
+    const payload = JSON.parse(fs.readFileSync(path.join(dataDir, region.key, "v0001.json"), "utf8"));
+    delete payload.player_identities;
+    const outputPath = path.join(buildDir, "data", region.key, "v0001.json");
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, `${JSON.stringify(payload)}\n`, "utf8");
+  });
+}
+
 function main() {
   const projectDir = path.resolve(__dirname, "..");
   const dataDir = path.resolve(readOption("--data-dir", path.join(projectDir, "public", "data")));
@@ -442,6 +445,7 @@ function main() {
   fs.writeFileSync(sitemapPath, createSitemap(pages), "utf8");
   if (!sitemapOnly) {
     writeSeoPages(buildDir, pages);
+    writeBrowserData(buildDir, dataDir, regionData);
     validateSeoPages(buildDir, pages, sitemapPath);
   }
   process.stdout.write(`Generated ${pages.length} SEO URLs\n`);

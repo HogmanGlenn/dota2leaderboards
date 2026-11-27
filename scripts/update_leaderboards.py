@@ -257,7 +257,13 @@ def remap_history_samples(
 
     decoded_samples.append((new_timestamp, new_snapshot))
     cutoff = new_timestamp - HISTORY_RETENTION_SECONDS
+    boundary = max(
+        (sample for sample in decoded_samples if cutoff - HISTORY_INTERVAL_SECONDS <= sample[0] < cutoff),
+        key=lambda sample: sample[0], default=None,
+    )
     decoded_samples = [(timestamp, ranks) for timestamp, ranks in decoded_samples if timestamp >= cutoff]
+    if boundary:
+        decoded_samples.insert(0, boundary)
 
     player_indexes: dict[str, int] = {}
     players: list[str] = []

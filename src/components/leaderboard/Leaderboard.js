@@ -70,6 +70,31 @@ function LoadingRows() {
   ));
 }
 
+function PaginationControl({ disabled, href, label, onNavigate, children }) {
+  const isLink = !disabled && typeof href === "string";
+  const Control = isLink ? "a" : "button";
+  return (
+    <Control
+      type={isLink ? undefined : "button"}
+      role={isLink ? "button" : undefined}
+      disabled={disabled || undefined}
+      href={disabled ? undefined : href}
+      aria-label={label}
+      onClick={(event) => {
+        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button > 0) return;
+        event.preventDefault();
+        onNavigate();
+      }}
+      onKeyDown={(event) => {
+        if (!disabled && event.key === " ") {
+          event.preventDefault();
+          onNavigate();
+        }
+      }}
+    >{children}</Control>
+  );
+}
+
 const PlayerRow = React.memo(function PlayerRow({
   player,
   relativeRank,
@@ -92,6 +117,7 @@ const PlayerRow = React.memo(function PlayerRow({
         showRankDelta && rankDelta ? "" : "rank-delta--pending",
       ].filter(Boolean).join(" ")}
       aria-hidden={showRankDelta && rankDelta ? undefined : "true"}
+      title={rankDelta?.type === "missing" ? "No recorded snapshot close enough to this comparison time." : undefined}
     >
       {rankDeltaLabel}
     </span>
@@ -192,6 +218,10 @@ export default function Leaderboard({
   onNativeFindClose = () => {},
   onNativeFindMatch = () => {},
   pageResetVersion = 0,
+  initialPage = 0,
+  onPageNavigate,
+  pageHref = () => undefined,
+  onVisiblePlayersChange,
   rowsPerPage,
   effectiveRowsPerPage = rowsPerPage,
   showRelativeRank,
@@ -205,7 +235,13 @@ export default function Leaderboard({
   isPlayerPinned = () => false,
   onTogglePinned = () => {},
 }) {
-  const [page, setPage] = React.useState(0);
+  const [page, setPage] = React.useState(initialPage);
+  const initialPageRef = React.useRef(initialPage);
+  initialPageRef.current = initialPage;
+  const navigatePage = React.useCallback((nextPage) => {
+    setPage(nextPage);
+    onPageNavigate?.(nextPage);
+  }, [onPageNavigate]);
   const [findWindowStart, setFindWindowStart] = React.useState(null);
   const [rowHeight, setRowHeight] = React.useState(DEFAULT_ROW_HEIGHT);
   const [virtualRange, setVirtualRange] = React.useState({ start: 0, end: 80 });
@@ -238,10 +274,15 @@ export default function Leaderboard({
   }, [clearNativeFindJump]);
 
   React.useEffect(() => {
-    setPage(0);
+    setPage(initialPageRef.current);
     setFindWindowStart(null);
     setSwipe(createIdleSwipeState());
   }, [players, rowsPerPage]);
+
+  React.useEffect(() => {
+    setPage(initialPage);
+    setFindWindowStart(null);
+  }, [initialPage]);
 
   React.useEffect(() => {
     setPage(0);
@@ -311,6 +352,9 @@ export default function Leaderboard({
     [effectiveRowsPerPage, pageStart, players]
   );
   const lastUpdated = formatUpdatedAt(updatedAt);
+  React.useEffect(() => {
+    if (!isLoading) onVisiblePlayersChange?.({ players: visiblePlayers });
+  }, [isLoading, onVisiblePlayersChange, visiblePlayers]);
 
   const handleTouchStart = React.useCallback((event) => {
     if (swipe.phase !== "idle" || event.touches.length !== 1) {
@@ -384,7 +428,7 @@ export default function Leaderboard({
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       closeNativeFindState();
       setFindWindowStart(null);
-      setPage((currentPage) => currentPage + direction);
+      navigatePage(page + direction);
       setSwipe(createIdleSwipeState());
       return;
     }
@@ -394,7 +438,7 @@ export default function Leaderboard({
       offset: direction > 0 ? -width : width,
       phase: "outgoing",
     });
-  }, [closeNativeFindState, maxPage, page]);
+  }, [closeNativeFindState, maxPage, navigatePage, page]);
 
   const handleTouchCancel = React.useCallback(() => {
     const wasDragging = swipeStartRef.current?.axis === "horizontal";
@@ -410,7 +454,7 @@ export default function Leaderboard({
       const width = bodyRef.current?.getBoundingClientRect().width || window.innerWidth;
       closeNativeFindState();
       setFindWindowStart(null);
-      setPage((currentPage) => currentPage + direction);
+      navigatePage(page + direction);
       setSwipe({
         direction,
         offset: direction > 0 ? width : -width,
@@ -429,7 +473,7 @@ export default function Leaderboard({
     if (swipe.phase === "incoming" || swipe.phase === "settling") {
       setSwipe(createIdleSwipeState());
     }
-  }, [closeNativeFindState, swipe]);
+  }, [closeNativeFindState, navigatePage, page, swipe]);
 
   React.useLayoutEffect(() => {
     const updateRowHeight = () => {
@@ -687,33 +731,33 @@ export default function Leaderboard({
       {!isLoading && (
         <footer className="leaderboard-footer">
           <div className="page-controls" aria-label="Pagination">
-            <button
-              type="button"
-              onClick={() => {
+            <PaginationControl
+              href={pageHref(page - 1)}
+              label="Previous page"
+              onNavigate={() => {
                 closeNativeFindState();
                 setFindWindowStart(null);
-                setPage((currentPage) => Math.max(0, currentPage - 1));
+                navigatePage(Math.max(0, page - 1));
               }}
               disabled={page === 0}
-              aria-label="Previous page"
             >
               &lt;
-            </button>
+            </PaginationControl>
             <span className="page-indicator" aria-live="polite">
               Page {page + 1} of {maxPage + 1}
             </span>
-            <button
-              type="button"
-              onClick={() => {
+            <PaginationControl
+              href={pageHref(page + 1)}
+              label="Next page"
+              onNavigate={() => {
                 closeNativeFindState();
                 setFindWindowStart(null);
-                setPage((currentPage) => Math.min(maxPage, currentPage + 1));
+                navigatePage(Math.min(maxPage, page + 1));
               }}
               disabled={page >= maxPage}
-              aria-label="Next page"
             >
               &gt;
-            </button>
+            </PaginationControl>
           </div>
           {lastUpdated && (
             <time className="updated-at" dateTime={new Date(updatedAt * 1000).toISOString()}>

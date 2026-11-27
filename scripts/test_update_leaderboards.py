@@ -242,7 +242,7 @@ class LeaderboardUpdaterTests(unittest.TestCase):
             )
             self.assertEqual([sample["r"][0] for sample in history["samples"]], [1, 2])
 
-    def test_history_is_pruned_to_thirty_days(self):
+    def test_history_retains_one_boundary_snapshot_for_month_comparisons(self):
         player = {"rank": 1, "name": "Player", "team_id": 42, "country": "fi"}
 
         with tempfile.TemporaryDirectory() as directory:
@@ -258,8 +258,20 @@ class LeaderboardUpdaterTests(unittest.TestCase):
             history = json.loads(
                 (output_dir / "europe" / "history.v0001.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(len(history["samples"]), 1)
-            self.assertEqual(history["samples"][0]["t"], 1_900_000_000)
+            self.assertEqual(len(history["samples"]), 2)
+            self.assertEqual(history["samples"][-1]["t"], 1_900_000_000)
+            self.assertEqual(history["samples"][0]["t"], 1_900_000_000 - updater.HISTORY_RETENTION_SECONDS - updater.HISTORY_INTERVAL_SECONDS)
+
+    def test_month_boundary_retention_keeps_only_the_nearest_preceding_snapshot(self):
+        now = 1_900_000_000
+        cutoff = now - updater.HISTORY_RETENTION_SECONDS
+        times = [cutoff - updater.HISTORY_INTERVAL_SECONDS - 1, cutoff - 7200, cutoff - 3600, cutoff + 7200]
+        history = {"players": ["p1"], "samples": [
+            {"t": timestamp, "i": [0], "r": [index + 1]} for index, timestamp in enumerate(times)
+        ]}
+        result = updater.remap_history_samples(history, now, {"p1": 5})
+        self.assertEqual([sample["t"] for sample in result["samples"]], [cutoff - 3600, cutoff + 7200, now])
+        self.assertEqual(len(history["samples"]), 4)
 
     def test_update_once_fails_when_bad_region_has_no_previous_data(self):
         with tempfile.TemporaryDirectory() as directory:

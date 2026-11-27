@@ -32,7 +32,11 @@ The production output is written to `build/`. The post-build step creates static
 
 ## Search indexing
 
-Country pages are generated from the current ranked players in each region at every build. A country that gains players automatically gets its page and sitemap entry again; absence from one snapshot does not permanently exclude it. Region tabs preserve the selected country. If the destination's successfully loaded data has no players from that country, the app returns to the main page.
+Region and country pages include crawlable pagination at `/europe/page/2/` and `/europe/finland/page/2/`. Each generated page contains 25 players, its own canonical URL, and real links to adjacent pages. The interactive controls retain their layout, keyboard behavior, swipe navigation, row-count settings, and whole-region Ctrl+F. Existing first-page, query, compact, pinned-player, and saved-view links remain supported. Alternate row counts canonicalize to the page covering the same starting rank range.
+
+Country pages are generated from the current ranked players in each region at every build. A country that gains players automatically gets its page and sitemap entry again; absence from one snapshot does not permanently exclude it. A small availability map embedded in each generated document makes region-tab links valid before any data request. Region tabs preserve the country when available and otherwise open the destination region without a country filter. Successful prefetches keep availability current; a failed request does not establish country absence.
+
+The interactive page retains a contextual accessible heading without adding visible elements. Titles, descriptions, canonicals, and structured data follow the displayed leaderboard and pagination after navigation.
 
 The build checks that every sitemap URL has a generated HTML page with its own canonical URL, that leaderboard pages allow indexing, and that static leaderboard links point to generated pages. Missing static pages use GitHub Pages' HTTP 404 response and redirect visitors to the main page with JavaScript and a meta-refresh fallback. A failed data request keeps the requested country URL available for retry, because a failed request does not establish whether the country exists.
 
@@ -48,7 +52,7 @@ The supplied analytics snapshot covers July 4 through October 1, 2026, with 2,05
 
 ## Leaderboard data
 
-Current snapshots are stored in `public/data/<region>/v0001.json`. Rank history is stored separately in `public/data/<region>/history.v0001.json` so refreshing a leaderboard cannot discard previously collected history.
+Current repository snapshots are stored in `public/data/<region>/v0001.json`. Rank history is stored separately in `public/data/<region>/history.v0001.json` so refreshing a leaderboard cannot discard previously collected history. The production build omits only `player_identities` from the browser-facing copy of `v0001.json`; it preserves every leaderboard row, player key, alias, and timestamp. Ctrl+F continues to search the complete regional player list. The full updater registry stays in the repository snapshot: use repository data for identity backups and restores, not the reduced browser download.
 
 Player keys are assigned by the updater and persisted in each snapshot's `player_identities` registry. The first refresh seeds this registry from the previously published snapshot, preserving existing keys and history. An unambiguous normalized name and country keep the same key when the player joins, leaves, or changes teams. The registry remembers absent players and previously observed teams across refreshes and restarts, independently of the eight-hour history interval. Cosmetic name formatting and team-tag changes also retain identity.
 
@@ -61,6 +65,8 @@ An empty source name and a name containing only spaces have different legacy bro
 The public source provides no account ID. Different names, countries, regions, blank-name transfers, and ambiguous same-name players are not automatically merged. Exact known profiles retain their keys; uncertain transfers receive separate identities to avoid mixing players' histories. Previously split identities cannot be reconstructed from history's hashes alone. Keep `player_identities` when copying or restoring snapshots; deleting it loses the remembered team transitions.
 
 The updater validates every non-empty response before replacing a region. Writes are atomic. If a request fails or returns invalid data, that region's existing snapshot and history remain unchanged. Rank snapshots are recorded at most once every eight hours and retained for 30 days. Node.js generates the sitemap from the validated regional data so country names and canonical paths use the same Unicode-safe normalization as the site build.
+
+Rank comparisons use the real snapshot nearest the requested 8-hour, 24-hour, 7-day, or 30-day baseline, with a maximum distance of four hours (half the collection interval). A missing baseline displays `—`, including after an outage; no ranks are interpolated or backfilled. A valid month baseline can still be used across an intervening outage. Retention keeps one additional snapshot immediately before the 30-day boundary, within eight hours of it, so a valid nearest monthly baseline is not discarded.
 
 Use Python 3.12, which matches the automation workflow:
 

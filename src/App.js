@@ -36,7 +36,8 @@ import {
 } from "./utils/savedSelections";
 import { getPlayerFindKey } from "./utils/playerFindText";
 import { createLeaderboardUrl, getLeaderboardPath, parseLeaderboardPath } from "./utils/leaderboardRoute";
-import { applySeoMetadata } from "./utils/seoMetadata";
+import { applySeoMetadata, getSeoMetadata } from "./utils/seoMetadata";
+import { countryForRegion, readLeaderboardAvailability } from "./utils/leaderboardAvailability";
 import { parseCompactShareRoute } from "./utils/shareRoute";
 import "./App.css";
 
@@ -44,6 +45,7 @@ const HOME_ROUTE = {
   region: "europe",
   country: "all",
   pageSize: DEFAULT_PAGE_SIZE,
+  page: 1,
   pinnedOnly: false,
   historyWindow: "off",
   sharedPinsParam: "",
@@ -145,7 +147,7 @@ function readRoute() {
   }
 
   if (compactShareRoute) {
-    return { ...compactShareRoute, demoHistory: false };
+    return { ...compactShareRoute, page: 1, demoHistory: false };
   }
 
   return {
@@ -156,6 +158,7 @@ function readRoute() {
       ? requestedCountry || HOME_ROUTE.country
       : pathRoute.country,
     pageSize: requestedLimit === null ? HOME_ROUTE.pageSize : requestedPageSize,
+    page: pathRoute.page || 1,
     pinnedOnly: requestedPinnedOnly === "1",
     historyWindow: requestedHistoryWindow || HOME_ROUTE.historyWindow,
     sharedPinsParam: requestedSharedPins || "",
@@ -165,6 +168,8 @@ function readRoute() {
 
 function Dashboard() {
   const [route, setRoute] = React.useState(readRoute);
+  const [availability, setAvailability] = React.useState(readLeaderboardAvailability);
+  const [visiblePage, setVisiblePage] = React.useState({ players: [] });
   const { region, country: countrySlug, pageSize } = route;
   const [leaderboard, setLeaderboard] = React.useState({ region: null, players: [], updatedAt: null });
   const [history, setHistory] = React.useState({ region: null, data: null });
@@ -196,6 +201,8 @@ function Dashboard() {
       .then((data) => {
         const regionData = { ...data, region: targetRegion };
         cache.current.set(targetRegion, regionData);
+        setAvailability((known) => ({ ...known, [targetRegion]: [...new Set(data.players
+          .filter((player) => player.countryCode).map((player) => player.countrySlug))] }));
         return regionData;
       })
       .finally(() => inFlight.current.delete(targetRegion));
@@ -348,25 +355,42 @@ function Dashboard() {
     [currentPlayers.length, pageSize]
   );
 
+  const canonicalPage = 1 + Math.floor(((route.page || 1) - 1) * pageSize / DEFAULT_PAGE_SIZE);
+  const canonicalPath = window.location.pathname === "/" && region === HOME_ROUTE.region && countrySlug === "all"
+    ? "/" : getLeaderboardPath(region, countrySlug, canonicalPage);
+  const contextTitle = getSeoMetadata(region, selectedCountry?.name || "", canonicalPath).title;
+  const regionPaths = Object.fromEntries(Object.keys(REGIONS).map((key) => [key,
+    getLeaderboardPath(key, countryForRegion(key, countrySlug, availability, cache.current, "all")),
+  ]));
+
   React.useEffect(() => {
-    const canonicalPath = (
-      window.location.pathname === "/"
-      && region === HOME_ROUTE.region
-      && countrySlug === HOME_ROUTE.country
-    )
-      ? "/"
-      : getLeaderboardPath(region, countrySlug);
-    applySeoMetadata(region, selectedCountry?.name || "", canonicalPath);
-  }, [countrySlug, region, selectedCountry]);
+    if (isLoading || leaderboard.region !== region || (countrySlug !== "all" && !selectedCountry)) return;
+    applySeoMetadata(region, selectedCountry?.name || "", canonicalPath, {
+      players: visiblePage.players, updatedAt: currentUpdatedAt,
+    });
+  }, [canonicalPath, countrySlug, currentUpdatedAt, isLoading, leaderboard.region, region, selectedCountry, visiblePage]);
 
   React.useEffect(() => {
     if (!isLoading && !error && leaderboard.region === region && currentPlayers.length > 0 && countrySlug !== "all" && !selectedCountry) {
+      const knownCountry = Object.values(availability).some((countries) => countries.includes(countrySlug))
+        || Array.from(cache.current.values()).some((data) => data.players.some((player) => player.countrySlug === countrySlug));
+      if (knownCountry) {
+        updateRoute({ country: "all", page: 1 }, true);
+        return;
+      }
       window.history.replaceState({}, "", "/");
       setSearch("");
       setRoute({ ...HOME_ROUTE });
       trackPageView("/");
     }
   }, [countrySlug, currentPlayers.length, error, isLoading, leaderboard.region, region, selectedCountry]);
+
+  React.useEffect(() => {
+    if (isLoading || !filteredPlayers.length) return;
+    const rows = pageSize === 5000 && filteredPlayers.length > 5000 ? filteredPlayers.length : pageSize;
+    const lastPage = Math.max(1, Math.ceil(filteredPlayers.length / rows));
+    if (route.page > lastPage) updateRoute({ page: lastPage }, true);
+  }, [filteredPlayers.length, isLoading, pageSize, route.page]);
 
   React.useEffect(() => {
     if (currentPlayers.length > 0 && pageSize !== DEFAULT_PAGE_SIZE && pageSize > currentPlayers.length) {
@@ -388,6 +412,9 @@ function Dashboard() {
       region,
       pageSize,
       ...updates,
+      page: updates.page ?? (["region", "country", "pageSize", "pinnedOnly", "sharedPinsParam"].some(
+        (key) => Object.hasOwn(updates, key) && updates[key] !== route[key]
+      ) ? 1 : route.page || 1),
       country: updates.country ?? countrySlug,
       sharedPinsParam: shouldDropSharedPins ? "" : updates.sharedPinsParam ?? route.sharedPinsParam,
     };
@@ -400,7 +427,13 @@ function Dashboard() {
     trackPageView(url);
   }
 
-  const changeRegion = (nextRegion) => updateRoute({ region: nextRegion, pinnedOnly: false });
+  const changeRegion = (nextRegion) => updateRoute({
+    region: nextRegion, country: countryForRegion(nextRegion, countrySlug, availability, cache.current), pinnedOnly: false,
+  });
+  const changeSearch = (value) => {
+    setSearch(value);
+    if (route.page > 1) updateRoute({ page: 1 }, true);
+  };
   const changeCountry = (country) => updateRoute({
     country: country?.slug || "all",
     pinnedOnly: false,
@@ -512,6 +545,7 @@ function Dashboard() {
     <div className="app-shell">
       <main className="content" id="main-content">
         <header className="site-header">
+          <h1 className="leaderboard-context-heading">{contextTitle}</h1>
           <a
             className="site-title"
             href="/"
@@ -525,6 +559,7 @@ function Dashboard() {
           </a>
         </header>
         <Navigation
+          regionPaths={regionPaths}
           region={region}
           onRegionChange={changeRegion}
           onRegionPrefetch={(targetRegion) => loadRegion(targetRegion).catch(() => {})}
@@ -533,7 +568,7 @@ function Dashboard() {
           selectedCountry={selectedCountry}
           onCountryChange={changeCountry}
           search={search}
-          onSearchChange={setSearch}
+          onSearchChange={changeSearch}
           pageSize={pageSize}
           pageSizeOptions={pageSizeOptions}
           onPageSizeChange={changePageSize}
@@ -568,6 +603,10 @@ function Dashboard() {
           saveStatus={saveStatus}
         />
         <Leaderboard
+          initialPage={(route.page || 1) - 1}
+          onPageNavigate={(page) => updateRoute({ page: page + 1 })}
+          pageHref={(page) => createLeaderboardUrl({ ...route, page: page + 1 })}
+          onVisiblePlayersChange={setVisiblePage}
           players={filteredPlayers}
           findIndexPlayers={currentPlayers}
           findJump={findJump}

@@ -24,6 +24,7 @@ const HISTORY_OPTION_LABELS = {
 };
 
 export default function Navigation({
+  regionPaths = {},
   region,
   onRegionChange,
   onRegionPrefetch,
@@ -84,7 +85,7 @@ export default function Navigation({
         {Object.entries(REGIONS).map(([value, label]) => (
           <a
             className={value === region ? "region-tab region-tab--active" : "region-tab"}
-            href={getLeaderboardPath(value, countrySlug)}
+            href={regionPaths[value] || getLeaderboardPath(value)}
             key={value}
             onMouseEnter={() => onRegionPrefetch(value)}
             onFocus={() => onRegionPrefetch(value)}

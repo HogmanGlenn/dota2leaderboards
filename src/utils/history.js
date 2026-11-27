@@ -6,6 +6,9 @@ export const HISTORY_WINDOWS = {
 };
 
 export const HISTORY_OPTIONS = ["off", ...Object.keys(HISTORY_WINDOWS)];
+// Snapshots are collected every eight hours. Never substitute a distant sample
+// when an outage left the requested comparison period unobserved.
+export const HISTORY_SAMPLE_TOLERANCE_SECONDS = 4 * 60 * 60;
 
 export function createHistoryIndex(history) {
   if (!history || !Array.isArray(history.players) || !Array.isArray(history.samples)) {
@@ -26,7 +29,11 @@ export function findHistorySample(samples, currentTimestamp, windowName) {
   const target = currentTimestamp - seconds;
   let best = null;
   samples.forEach((sample) => {
-    if (sample.t <= target && (!best || sample.t > best.t)) best = sample;
+    if (!sample || !Number.isFinite(sample.t) || sample.t >= currentTimestamp) return;
+    const distance = Math.abs(sample.t - target);
+    if (distance > HISTORY_SAMPLE_TOLERANCE_SECONDS) return;
+    if (!best || distance < Math.abs(best.t - target)
+      || (distance === Math.abs(best.t - target) && sample.t < best.t)) best = sample;
   });
   return best;
 }
@@ -36,7 +43,7 @@ export function getRankDelta(player, historyIndex, currentTimestamp, windowName)
   if (!sample) return { label: "—", type: "missing" };
 
   if (!Array.isArray(sample.i) || !Array.isArray(sample.r)) {
-    return { label: "new", type: "new" };
+    return { label: "—", type: "missing" };
   }
 
   let samplePosition = -1;
@@ -48,8 +55,8 @@ export function getRankDelta(player, historyIndex, currentTimestamp, windowName)
   }
   if (samplePosition < 0) return { label: "new", type: "new" };
 
-  const previousRank = Number(sample.r[samplePosition]);
-  if (!Number.isFinite(previousRank)) return { label: "—", type: "missing" };
+  const previousRank = sample.r[samplePosition];
+  if (!Number.isFinite(previousRank) || previousRank < 1) return { label: "—", type: "missing" };
 
   const movement = previousRank - player.rank;
   if (movement > 0) return { label: `+${movement.toLocaleString()}`, type: "up" };
@@ -80,6 +87,8 @@ export function createSimulatedHistory(players, currentTimestamp) {
     interval_hours: 8,
     retention_days: 30,
     players: keys,
-    samples: [{ t: timestamp, i: indexes, r: ranks }],
+    samples: Object.values(HISTORY_WINDOWS).map((seconds) => ({
+      t: timestamp + HISTORY_WINDOWS["30d"] - seconds, i: indexes, r: ranks,
+    })),
   };
 }

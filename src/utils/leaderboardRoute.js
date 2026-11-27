@@ -18,13 +18,14 @@ export function getCountryPath(countrySlug) {
   return normalizedSlug;
 }
 
-export function getLeaderboardPath(region, country = "all") {
+export function getLeaderboardPath(region, country = "all", page = 1) {
   const regionPath = REGION_PATHS[region];
   if (!regionPath) return "/";
-  if (country === "all") return `/${regionPath}/`;
+  const suffix = Number.isSafeInteger(page) && page > 1 ? `page/${page}/` : "";
+  if (country === "all") return `/${regionPath}/${suffix}`;
 
   const countryPath = getCountryPath(country);
-  return countryPath ? `/${regionPath}/${countryPath}/` : "/";
+  return countryPath ? `/${regionPath}/${countryPath}/${suffix}` : "/";
 }
 
 export function parseLeaderboardPath(pathname) {
@@ -36,13 +37,16 @@ export function parseLeaderboardPath(pathname) {
     };
   }
 
-  const match = String(pathname || "").match(/^\/([a-z0-9-]+)(?:\/([a-z0-9-]+))?\/?$/);
+  const match = String(pathname || "").match(/^\/([a-z0-9-]+)(?:\/((?!page(?:\/|$))[a-z0-9-]+))?(?:\/page\/([1-9][0-9]*))?\/?$/);
   if (!match) return null;
 
   const region = REGIONS_BY_PATH[match[1]];
   if (!region || !Object.hasOwn(REGIONS, region)) return null;
+  const page = match[3] ? Number(match[3]) : 1;
+  if (!Number.isSafeInteger(page) || (match[3] && page < 2)) return null;
+  const pagination = page > 1 ? { page } : {};
   if (!match[2]) {
-    return { isHomepage: false, region, country: "all" };
+    return { isHomepage: false, region, country: "all", ...pagination };
   }
 
   if (!COUNTRY_PATH_PATTERN.test(match[2])) return null;
@@ -51,6 +55,7 @@ export function parseLeaderboardPath(pathname) {
     isHomepage: false,
     region,
     country: match[2].replace(/-/g, "_"),
+    ...pagination,
   };
 }
 
@@ -62,7 +67,7 @@ export function createLeaderboardUrl(route, options = {}) {
   } = options;
   const path = homepage
     ? "/"
-    : getLeaderboardPath(route.region, route.country);
+    : getLeaderboardPath(route.region, route.country, route.page);
   const params = new URLSearchParams();
 
   if (path === "/" && !homepage) {

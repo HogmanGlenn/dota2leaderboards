@@ -174,7 +174,7 @@ test("loads a country page and a 7d window from its permanent URL", async () => 
 
   expect(screen.getByRole("link", { name: "Americas" })).toHaveAttribute(
     "href",
-    "/americas/finland/"
+    "/americas/"
   );
   expect(await screen.findByText("Top Carry")).toBeInTheDocument();
   expect(screen.queryByText("Mid Player")).not.toBeInTheDocument();
@@ -193,7 +193,7 @@ test("loads a country page and a 7d window from its permanent URL", async () => 
   );
 });
 
-test("returns to the homepage when the selected country has no players in another region", async () => {
+test("keeps the destination region and other filters when the country is unavailable", async () => {
   window.history.replaceState({}, "", "/europe/finland/?limit=50");
   const chinaPayload = createPayload(60);
   chinaPayload.leaderboard.forEach((player) => { player.country = "cn"; });
@@ -207,19 +207,19 @@ test("returns to the homepage when the selected country has no players in anothe
   await screen.findByText("Player 25");
   await userEvent.type(screen.getByLabelText("Player or team"), "Player 2");
 
-  expect(screen.getByRole("link", { name: "China" })).toHaveAttribute("href", "/china/finland/");
+  expect(screen.getByRole("link", { name: "China" })).toHaveAttribute("href", "/china/");
   await act(async () => userEvent.hover(screen.getByRole("link", { name: "China" })));
   await act(async () => userEvent.click(screen.getByRole("link", { name: "China" })));
 
-  await waitFor(() => expect(window.location.pathname).toBe("/"));
-  expect(window.location.search).toBe("");
-  expect(await screen.findByText("Player 1")).toBeInTheDocument();
+  await waitFor(() => expect(window.location.pathname).toBe("/china/"));
+  expect(window.location.search).toBe("?limit=50");
+  expect(await screen.findByText("Player 2")).toBeInTheDocument();
   expect(screen.getByLabelText("Filter by country")).toHaveValue("");
-  expect(screen.getByLabelText("Player or team")).toHaveValue("");
-  expect(document.title).toBe("Dota 2 Leaderboard | Regional Rankings");
+  expect(screen.getByLabelText("Player or team")).toHaveValue("Player 2");
+  expect(document.title).toBe("Dota 2 Leaderboard | China");
 });
 
-test("returns to the homepage after a pending load confirms the selected country is missing", async () => {
+test("keeps the destination region after a pending load confirms the country is missing", async () => {
   window.history.replaceState({}, "", "/europe/finland/");
   let resolveChina;
   const chinaRequest = new Promise((resolve) => { resolveChina = resolve; });
@@ -229,7 +229,7 @@ test("returns to the homepage after a pending load confirms the selected country
 
   render(<App />);
   await screen.findByText("Top Carry");
-  expect(screen.getByRole("link", { name: "China" })).toHaveAttribute("href", "/china/finland/");
+  expect(screen.getByRole("link", { name: "China" })).toHaveAttribute("href", "/china/");
   await act(async () => userEvent.click(screen.getByRole("link", { name: "China" })));
   expect(window.location.pathname).toBe("/china/finland/");
 
@@ -242,9 +242,9 @@ test("returns to the homepage after a pending load confirms the selected country
     }),
   }));
 
-  await waitFor(() => expect(window.location.pathname).toBe("/"));
-  expect(await screen.findByText("Top Carry")).toBeInTheDocument();
-  expect(document.title).toBe("Dota 2 Leaderboard | Regional Rankings");
+  await waitFor(() => expect(window.location.pathname).toBe("/china/"));
+  expect(await screen.findByText("China Player")).toBeInTheDocument();
+  expect(document.title).toBe("Dota 2 Leaderboard | China");
 });
 
 test("keeps a failed country request on its country URL and allows retrying", async () => {
@@ -264,7 +264,7 @@ test("keeps a failed country request on its country URL and allows retrying", as
 
   render(<App />);
   await screen.findByText("Top Carry");
-  expect(screen.getByRole("link", { name: "China" })).toHaveAttribute("href", "/china/finland/");
+  expect(screen.getByRole("link", { name: "China" })).toHaveAttribute("href", "/china/");
   await act(async () => userEvent.click(screen.getByRole("link", { name: "China" })));
   await screen.findByText("Leaderboard request failed (503).");
   expect(window.location.pathname).toBe("/china/finland/");

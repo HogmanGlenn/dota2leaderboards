@@ -248,7 +248,8 @@
   user-select: none;
 }
 
-.page-controls button {
+.page-controls button,
+.page-controls a {
   display: inline-flex;
   width: 26px;
   height: 26px;
@@ -261,9 +262,11 @@
   cursor: pointer;
   font-size: 0.86rem;
   line-height: 1;
+  text-decoration: none;
 }
 
-.page-controls button:hover:not(:disabled) {
+.page-controls button:hover:not(:disabled),
+.page-controls a:hover {
   border-color: #448e85;
 }
 
